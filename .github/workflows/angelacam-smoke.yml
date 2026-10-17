@@ -1,0 +1,62 @@
+name: angelacam-smoke
+
+# AngelaCam 全自动冒烟测试（无需人工介入）：
+# Build APK 构建成功后自动触发 → 模拟器安装 APK → 启动截图 → 检查进程存活 →
+# 验证"打开方式" intent-filter（VIEW 图片/视频能解析到 AngelaCam）→ 上传截图。
+
+"on":
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download APK from dev-latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL --retry 3 -o app-release.apk \
+            https://github.com/dukangalex/AngelaCam/releases/download/dev-latest/app-release.apk
+          ls -la app-release.apk
+
+      - name: Smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_4
+          script: |
+            set -euo pipefail
+            adb install -r app-release.apk
+            PKG=com.dukangalex.angelacam
+            # 预授权，跳过运行时权限弹窗
+            adb shell pm grant $PKG android.permission.CAMERA || true
+            adb shell pm grant $PKG android.permission.RECORD_AUDIO || true
+            adb shell am start -n $PKG/.MainActivity
+            sleep 8
+            adb exec-out screencap -p > smoke-launch.png
+            # 1) 进程存活 = 未闪退
+            adb shell pidof $PKG
+            echo "APP_ALIVE_OK"
+            # 2) "打开方式" intent 解析：VIEW 图片/视频必须能解析到 AngelaCam
+            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t image/jpeg | tee view-image.txt
+            grep -qi angelacam view-image.txt && echo "VIEW_IMAGE_OK"
+            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t video/mp4 | tee view-video.txt
+            grep -qi angelacam view-video.txt && echo "VIEW_VIDEO_OK"
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angelacam-smoke-screenshot
+          path: smoke-launch.png
+          if-no-files-found: warn
