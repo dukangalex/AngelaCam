@@ -33,6 +33,7 @@
     <string name="aspect_16_9">16:9</string>
     <string name="aspect_1_1">1:1</string>
     <string name="edit_title">编辑照片</string>
+    <string name="external_title">查看</string>
     <string name="edit_set_wallpaper">设为壁纸</string>
     <string name="crop_screen">屏幕比例</string>
     <string name="wallpaper_choose_mode">设为壁纸</string>
