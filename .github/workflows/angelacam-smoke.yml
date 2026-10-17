@@ -35,7 +35,8 @@ jobs:
           arch: x86_64
           profile: pixel_4
           script: |
-            set -euo pipefail
+            # 注意：此脚本跑在 dash 下，不支持 pipefail，用 set -eu + 显式 exit 1
+            set -eu
             adb install -r app-release.apk
             PKG=com.dukangalex.angelacam
             # 预授权，跳过运行时权限弹窗
@@ -45,13 +46,28 @@ jobs:
             sleep 8
             adb exec-out screencap -p > smoke-launch.png
             # 1) 进程存活 = 未闪退
-            adb shell pidof $PKG
+            if ! adb shell pidof "$PKG" > /dev/null; then
+              echo "APP_NOT_ALIVE"
+              exit 1
+            fi
             echo "APP_ALIVE_OK"
             # 2) "打开方式" intent 解析：VIEW 图片/视频必须能解析到 AngelaCam
-            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t image/jpeg | tee view-image.txt
-            grep -qi angelacam view-image.txt && echo "VIEW_IMAGE_OK"
-            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t video/mp4 | tee view-video.txt
-            grep -qi angelacam view-video.txt && echo "VIEW_VIDEO_OK"
+            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t image/jpeg > view-image.txt
+            cat view-image.txt
+            if grep -qi angelacam view-image.txt; then
+              echo "VIEW_IMAGE_OK"
+            else
+              echo "VIEW_IMAGE_MISSING"
+              exit 1
+            fi
+            adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t video/mp4 > view-video.txt
+            cat view-video.txt
+            if grep -qi angelacam view-video.txt; then
+              echo "VIEW_VIDEO_OK"
+            else
+              echo "VIEW_VIDEO_MISSING"
+              exit 1
+            fi
 
       - name: Upload screenshot
         if: always()
