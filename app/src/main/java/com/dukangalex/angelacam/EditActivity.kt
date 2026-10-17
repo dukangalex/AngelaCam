@@ -1,5 +1,6 @@
 package com.dukangalex.angelacam
 
+import android.app.WallpaperManager
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -17,6 +18,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.dukangalex.angelacam.databinding.ActivityEditBinding
 import java.text.SimpleDateFormat
@@ -33,6 +35,8 @@ class EditActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_URI = "extra_uri"
+        /** 壁纸模式：编辑后直接设为壁纸（参照 Google 壁纸流程） */
+        const val EXTRA_WALLPAPER_MODE = "extra_wallpaper_mode"
         private const val TAG = "EditPhoto"
         private const val MAX_SIZE = 2048
 
@@ -47,6 +51,10 @@ class EditActivity : AppCompatActivity() {
 
     private var originalBitmap: Bitmap? = null
     private var workingBitmap: Bitmap? = null
+
+    private var wallpaperMode = false
+    private var screenRatioW = 0f
+    private var screenRatioH = 0f
 
     // 结构编辑状态（基于原图重建）
     private var cropRatioW = 0f // 0=原图
@@ -71,9 +79,21 @@ class EditActivity : AppCompatActivity() {
             return
         }
         val uri = Uri.parse(uriStr)
+        wallpaperMode = intent.getBooleanExtra(EXTRA_WALLPAPER_MODE, false)
+        if (wallpaperMode) {
+            // 屏幕比例（竖屏），参照 Google 壁纸默认按屏幕裁剪
+            val dm = resources.displayMetrics
+            screenRatioW = dm.widthPixels.toFloat()
+            screenRatioH = dm.heightPixels.toFloat()
+            binding.tvTitle.text = getString(R.string.edit_set_wallpaper)
+            binding.btnSave.text = getString(R.string.edit_set_wallpaper)
+            binding.btnCropScreen.visibility = View.VISIBLE
+        }
 
         binding.btnCancel.setOnClickListener { finish() }
-        binding.btnSave.setOnClickListener { save() }
+        binding.btnSave.setOnClickListener {
+            if (wallpaperMode) applyAsWallpaper() else save()
+        }
 
         binding.tabCrop.setOnClickListener { showTool(TOOL_CROP) }
         binding.tabRotate.setOnClickListener { showTool(TOOL_ROTATE) }
@@ -84,6 +104,10 @@ class EditActivity : AppCompatActivity() {
         binding.btnCrop11.setOnClickListener { setCrop(1f, 1f); markCropSelected(binding.btnCrop11) }
         binding.btnCrop43.setOnClickListener { setCrop(4f, 3f); markCropSelected(binding.btnCrop43) }
         binding.btnCrop169.setOnClickListener { setCrop(16f, 9f); markCropSelected(binding.btnCrop169) }
+        binding.btnCropScreen.setOnClickListener {
+            setCrop(screenRatioW, screenRatioH)
+            markCropSelected(binding.btnCropScreen)
+        }
 
         binding.btnRotateLeft.setOnClickListener { rotation = (rotation + 270) % 360; rebuildWorking() }
         binding.btnRotateRight.setOnClickListener { rotation = (rotation + 90) % 360; rebuildWorking() }
@@ -112,7 +136,13 @@ class EditActivity : AppCompatActivity() {
                         Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
                         finish()
                     } else {
-                        rebuildWorking()
+                        if (wallpaperMode) {
+                            // 壁纸模式默认按屏幕比例裁剪（参照 Google 壁纸）
+                            setCrop(screenRatioW, screenRatioH)
+                            markCropSelected(binding.btnCropScreen)
+                        } else {
+                            rebuildWorking()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -167,7 +197,7 @@ class EditActivity : AppCompatActivity() {
     private fun markCropSelected(selected: Button) {
         val buttons = listOf(
             binding.btnCropOriginal, binding.btnCrop11,
-            binding.btnCrop43, binding.btnCrop169
+            binding.btnCrop43, binding.btnCrop169, binding.btnCropScreen
         )
         highlightSelected(buttons, selected)
     }
@@ -325,18 +355,25 @@ class EditActivity : AppCompatActivity() {
 
     // ---------- 保存 ----------
 
+    /** 按当前编辑状态渲染最终位图（含滤镜/调节），调用方负责回收 */
+    private fun renderFinalBitmap(): Bitmap? {
+        val bmp = workingBitmap ?: return null
+        val matrix = buildColorMatrix()
+        val result = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(matrix)
+        }
+        canvas.drawBitmap(bmp, 0f, 0f, paint)
+        return result
+    }
+
     private fun save() {
-        val bmp = workingBitmap ?: return
+        if (workingBitmap == null) return
         binding.btnSave.isEnabled = false
         executor.execute {
             try {
-                val matrix = buildColorMatrix()
-                val result = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(result)
-                val paint = Paint().apply {
-                    colorFilter = ColorMatrixColorFilter(matrix)
-                }
-                canvas.drawBitmap(bmp, 0f, 0f, paint)
+                val result = renderFinalBitmap() ?: throw IllegalStateException("渲染失败")
 
                 val name = "AngelaCam_${
                     SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
@@ -368,6 +405,67 @@ class EditActivity : AppCompatActivity() {
                     binding.btnSave.isEnabled = true
                     Toast.makeText(this, "保存失败：${e.message}", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+    }
+
+    // ---------- 壁纸模式 ----------
+
+    /** 壁纸模式：渲染当前编辑效果，直接设为壁纸（不另存文件） */
+    private fun applyAsWallpaper() {
+        if (workingBitmap == null) return
+        binding.btnSave.isEnabled = false
+        executor.execute {
+            try {
+                val result = renderFinalBitmap() ?: throw IllegalStateException("渲染失败")
+                runOnUiThread {
+                    binding.btnSave.isEnabled = true
+                    chooseWallpaperTarget(result)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "渲染失败", e)
+                runOnUiThread {
+                    binding.btnSave.isEnabled = true
+                    Toast.makeText(this, R.string.wallpaper_fail, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun chooseWallpaperTarget(bitmap: Bitmap) {
+        val options = arrayOf(
+            getString(R.string.wallpaper_home),
+            getString(R.string.wallpaper_lock),
+            getString(R.string.wallpaper_both)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.wallpaper_title)
+            .setItems(options) { _, which -> doSetWallpaper(bitmap, which) }
+            .setOnCancelListener { bitmap.recycle() }
+            .show()
+    }
+
+    private fun doSetWallpaper(bitmap: Bitmap, which: Int) {
+        executor.execute {
+            try {
+                val wm = WallpaperManager.getInstance(this)
+                if (which == 0 || which == 2) {
+                    wm.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM)
+                }
+                if (which == 1 || which == 2) {
+                    wm.setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK)
+                }
+                runOnUiThread {
+                    Toast.makeText(this, R.string.wallpaper_done, Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "设置壁纸失败", e)
+                runOnUiThread {
+                    Toast.makeText(this, R.string.wallpaper_fail, Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                bitmap.recycle()
             }
         }
     }

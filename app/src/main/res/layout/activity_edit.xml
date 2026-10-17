@@ -26,6 +26,7 @@
             android:textSize="16sp" />
 
         <TextView
+            android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -158,6 +159,16 @@
                 android:background="@android:color/transparent"
                 android:text="@string/aspect_16_9"
                 android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnCropScreen"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="72dp"
+                android:background="@android:color/transparent"
+                android:text="@string/crop_screen"
+                android:textColor="#FFFFFF"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- 旋转选项 -->

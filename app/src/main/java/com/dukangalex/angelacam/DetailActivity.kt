@@ -284,6 +284,27 @@ class DetailActivity : AppCompatActivity() {
         val item = currentItem() ?: return
         if (item.isVideo) return
         val options = arrayOf(
+            getString(R.string.wallpaper_direct),
+            getString(R.string.wallpaper_edit_first)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.wallpaper_choose_mode)
+            .setItems(options) { _, which ->
+                if (which == 0) {
+                    chooseWallpaperDestination(item)
+                } else {
+                    val intent = Intent(this, EditActivity::class.java).apply {
+                        putExtra(EditActivity.EXTRA_URI, item.uri)
+                        putExtra(EditActivity.EXTRA_WALLPAPER_MODE, true)
+                    }
+                    startActivity(intent)
+                }
+            }
+            .show()
+    }
+
+    private fun chooseWallpaperDestination(item: CaptureStore.Item) {
+        val options = arrayOf(
             getString(R.string.wallpaper_home),
             getString(R.string.wallpaper_lock),
             getString(R.string.wallpaper_both)
