@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Angela相机</string>
+    <string name="mode_photo">拍照</string>
+    <string name="mode_video">录像</string>
+    <string name="desc_flash">闪光灯</string>
+    <string name="desc_switch_camera">切换摄像头</string>
+    <string name="desc_shutter">拍摄</string>
+    <string name="desc_thumbnail">我的相册</string>
+    <string name="desc_grid">构图辅助线</string>
+    <string name="desc_back">返回</string>
+    <string name="desc_delete">删除</string>
+    <string name="desc_share">分享</string>
+    <string name="timer_off">关</string>
+    <string name="timer_3s">3s</string>
+    <string name="timer_10s">10s</string>
+    <string name="gallery_title">我的相册</string>
+    <string name="gallery_empty">还没有拍摄过照片或视频</string>
+    <string name="delete_confirm_title">删除这张照片/视频？</string>
+    <string name="delete_confirm_ok">删除</string>
+    <string name="delete_confirm_cancel">取消</string>
+</resources>
