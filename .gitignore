@@ -5,3 +5,6 @@
 /build
 /app/build
 .DS_Store
+# 签名密钥绝不进仓库（CI 从 Secrets 还原）
+*.keystore
+*.jks

@@ -19,8 +19,25 @@ android {
         }
     }
 
+    // 正式签名配置：keystore 由 CI 从 Secrets 还原，密码走环境变量，绝不进仓库
+    // 本地构建无环境变量时不创建，release 包保持未签名（不影响调试）
+    val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    if (releaseKeystorePath != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
