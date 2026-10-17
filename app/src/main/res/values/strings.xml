@@ -53,4 +53,22 @@
     <string name="adjust_brightness">亮度</string>
     <string name="adjust_contrast">对比度</string>
     <string name="adjust_saturation">饱和度</string>
+    <string name="desc_wallpaper">设为壁纸</string>
+    <string name="desc_info">详细信息</string>
+    <string name="desc_slideshow">幻灯片</string>
+    <string name="wallpaper_title">设为壁纸</string>
+    <string name="wallpaper_home">桌面壁纸</string>
+    <string name="wallpaper_lock">锁屏壁纸</string>
+    <string name="wallpaper_both">同时设置</string>
+    <string name="wallpaper_done">壁纸设置成功</string>
+    <string name="wallpaper_fail">壁纸设置失败</string>
+    <string name="info_title">详细信息</string>
+    <string name="info_name">文件名</string>
+    <string name="info_type">类型</string>
+    <string name="info_size">大小</string>
+    <string name="info_dimensions">尺寸</string>
+    <string name="info_date">拍摄时间</string>
+    <string name="type_photo">照片</string>
+    <string name="type_video">视频</string>
+    <string name="dialog_ok">确定</string>
 </resources>

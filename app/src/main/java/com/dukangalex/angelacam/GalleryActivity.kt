@@ -36,10 +36,9 @@ class GalleryActivity : AppCompatActivity() {
         binding.btnBack.setOnClickListener { finish() }
         binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
         binding.recyclerView.adapter = adapter
-        adapter.onItemClick = { item ->
+        adapter.onItemClick = { position ->
             val intent = Intent(this, DetailActivity::class.java).apply {
-                putExtra(DetailActivity.EXTRA_URI, item.uri)
-                putExtra(DetailActivity.EXTRA_MIME, item.mime)
+                putExtra(DetailActivity.EXTRA_POSITION, position)
             }
             startActivity(intent)
         }
@@ -67,7 +66,7 @@ class GalleryActivity : AppCompatActivity() {
 
     private inner class CaptureAdapter : RecyclerView.Adapter<CaptureAdapter.VH>() {
 
-        var onItemClick: ((CaptureStore.Item) -> Unit)? = null
+        var onItemClick: ((Int) -> Unit)? = null
         private var items: List<CaptureStore.Item> = emptyList()
 
         fun submit(newItems: List<CaptureStore.Item>) {
@@ -116,7 +115,9 @@ class GalleryActivity : AppCompatActivity() {
                     // 缩略图加载失败，保持占位
                 }
             }
-            holder.itemView.setOnClickListener { onItemClick?.invoke(item) }
+            holder.itemView.setOnClickListener {
+                onItemClick?.invoke(holder.bindingAdapterPosition)
+            }
         }
     }
 }
