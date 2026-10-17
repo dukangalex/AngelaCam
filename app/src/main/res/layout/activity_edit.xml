@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@android:color/black">
+
+    <!-- 顶栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="48dp"
+        android:paddingBottom="8dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <Button
+            android:id="@+id/btnCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_cancel"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/edit_title"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_save"
+            android:textColor="#4CAF50"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 预览 -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ImageView
+            android:id="@+id/ivPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- 工具页签 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp">
+
+        <Button
+            android:id="@+id/tabCrop"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_crop"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/tabRotate"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_rotate"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/tabFilter"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_filter"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/tabAdjust"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_adjust"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <!-- 选项区 -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:background="#80000000">
+
+        <!-- 裁剪选项 -->
+        <LinearLayout
+            android:id="@+id/cropOptions"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btnCropOriginal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="72dp"
+                android:background="@android:color/transparent"
+                android:text="@string/crop_original"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnCrop11"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="72dp"
+                android:background="@android:color/transparent"
+                android:text="@string/aspect_1_1"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnCrop43"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="72dp"
+                android:background="@android:color/transparent"
+                android:text="@string/aspect_4_3"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnCrop169"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="72dp"
+                android:background="@android:color/transparent"
+                android:text="@string/aspect_16_9"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+        <!-- 旋转选项 -->
+        <LinearLayout
+            android:id="@+id/rotateOptions"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btnRotateLeft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="88dp"
+                android:background="@android:color/transparent"
+                android:text="@string/rotate_left"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnRotateRight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="88dp"
+                android:background="@android:color/transparent"
+                android:text="@string/rotate_right"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnFlip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="88dp"
+                android:background="@android:color/transparent"
+                android:text="@string/flip_horizontal"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+        <!-- 滤镜选项 -->
+        <HorizontalScrollView
+            android:id="@+id/filterOptions"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
+
+                <Button
+                    android:id="@+id/btnFilterNone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_none"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFilterBw"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_bw"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFilterSepia"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_sepia"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFilterCool"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_cool"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFilterWarm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_warm"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFilterVivid"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/filter_vivid"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- 调节选项 -->
+        <LinearLayout
+            android:id="@+id/adjustOptions"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/adjust_brightness"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/seekBrightness"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="200"
+                    android:progress="100" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/adjust_contrast"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/seekContrast"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="200"
+                    android:progress="100" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/adjust_saturation"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/seekSaturation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="200"
+                    android:progress="100" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>

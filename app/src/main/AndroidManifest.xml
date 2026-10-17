@@ -37,6 +37,11 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity
+            android:name=".EditActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
     </application>
 
 </manifest>

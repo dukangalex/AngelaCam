@@ -2,9 +2,14 @@ package com.dukangalex.angelacam
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.MediaActionSound
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +21,7 @@ import android.util.Log
 import android.util.Size
 import android.view.GestureDetector
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
@@ -23,7 +29,9 @@ import android.view.WindowManager
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
@@ -40,6 +48,8 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
 import com.dukangalex.angelacam.databinding.ActivityMainBinding
+import com.dukangalex.angelacam.databinding.DialogSettingsBinding
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -62,8 +72,16 @@ class MainActivity : AppCompatActivity() {
     private var torchOn = false
     private var photoMode = true
     private var timerSeconds = 0 // 0=关, 3, 10
-    private var gridOn = false
+    private var gridMode = GridOverlayView.MODE_OFF
     private var countingDown = false
+    // v1.1.0 新增调节参数
+    private var aspectRatio = ASPECT_4_3 // 0=4:3, 1=16:9, 2=1:1
+    private var mirrorSelfie = true
+    private var shutterSound = true
+    private var tapCapture = false
+
+    private lateinit var prefs: SharedPreferences
+    private var mediaActionSound: MediaActionSound? = null
 
     private lateinit var scaleDetector: ScaleGestureDetector
     private lateinit var tapDetector: GestureDetector
@@ -104,6 +122,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         cameraExecutor = Executors.newSingleThreadExecutor()
 
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        mirrorSelfie = prefs.getBoolean(KEY_MIRROR, true)
+        shutterSound = prefs.getBoolean(KEY_SHUTTER_SOUND, true)
+        tapCapture = prefs.getBoolean(KEY_TAP_CAPTURE, false)
+        mediaActionSound = MediaActionSound().apply {
+            load(MediaActionSound.SHUTTER_CLICK)
+        }
+
         setupGestures()
         binding.btnShutter.setOnClickListener { onShutter() }
         binding.btnMode.setOnClickListener { toggleMode() }
@@ -111,10 +137,14 @@ class MainActivity : AppCompatActivity() {
         binding.btnSwitchCamera.setOnClickListener { switchCamera() }
         binding.btnThumbnail.setOnClickListener { openGallery() }
         binding.btnTimer.setOnClickListener { cycleTimer() }
-        binding.btnGrid.setOnClickListener { toggleGrid() }
+        binding.btnGrid.setOnClickListener { cycleGrid() }
+        binding.btnAspect.setOnClickListener { cycleAspect() }
+        binding.btnSettings.setOnClickListener { showSettings() }
         updateFlashIcon()
         updateModeUi()
         updateTimerUi()
+        updateAspectUi()
+        updateGridUi()
 
         requestPermissionsIfNeeded()
     }
@@ -129,6 +159,8 @@ class MainActivity : AppCompatActivity() {
         uiHandler.removeCallbacks(timerRunnable)
         uiHandler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
+        mediaActionSound?.release()
+        mediaActionSound = null
     }
 
     /** 音量键快门 */
@@ -188,6 +220,10 @@ class MainActivity : AppCompatActivity() {
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .setFlashMode(flashMode)
+            .setTargetAspectRatio(
+                if (aspectRatio == ASPECT_16_9) AspectRatio.RATIO_16_9
+                else AspectRatio.RATIO_4_3
+            )
             .build()
         val recorder = Recorder.Builder()
             .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
@@ -238,9 +274,18 @@ class MainActivity : AppCompatActivity() {
         ).build()
 
         binding.btnShutter.isEnabled = false
+        if (shutterSound) {
+            try {
+                mediaActionSound?.play(MediaActionSound.SHUTTER_CLICK)
+            } catch (e: Exception) {
+                Log.w(TAG, "快门音播放失败", e)
+            }
+        }
         capture.takePicture(output, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(results: ImageCapture.OutputFileResults) {
                 results.savedUri?.let { uri ->
+                    // v1.1.0: 1:1 画幅中心裁剪 / 前置自拍镜像
+                    postProcessPhoto(uri)
                     CaptureStore.add(this@MainActivity, uri, "image/jpeg", name)
                 }
                 runOnUiThread {
@@ -258,6 +303,45 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "拍照失败", exc)
             }
         })
+    }
+
+    /**
+     * 拍照后期处理（后台线程调用）：
+     * - 画幅比 1:1：中心裁剪正方形
+     * - 前置摄像头 + 自拍镜像开：水平翻转（与预览一致）
+     */
+    private fun postProcessPhoto(uri: Uri) {
+        val needCrop = aspectRatio == ASPECT_1_1
+        val needMirror = mirrorSelfie && lensFacing == CameraSelector.LENS_FACING_FRONT
+        if (!needCrop && !needMirror) return
+        try {
+            val input = contentResolver.openInputStream(uri) ?: return
+            val src = BitmapFactory.decodeStream(input)
+            input.close()
+            if (src == null) return
+            var out = src
+            if (needCrop) {
+                val side = minOf(out.width, out.height)
+                val x = (out.width - side) / 2
+                val y = (out.height - side) / 2
+                out = Bitmap.createBitmap(out, x, y, side, side)
+                if (out !== src) src.recycle()
+            }
+            if (needMirror) {
+                val matrix = Matrix().apply { preScale(-1f, 1f) }
+                val flipped = Bitmap.createBitmap(out, 0, 0, out.width, out.height, matrix, true)
+                if (flipped !== out) out.recycle()
+                out = flipped
+            }
+            contentResolver.openOutputStream(uri, "rwt")?.use { os ->
+                val bos = ByteArrayOutputStream()
+                out.compress(Bitmap.CompressFormat.JPEG, 95, bos)
+                os.write(bos.toByteArray())
+            }
+            out.recycle()
+        } catch (e: Exception) {
+            Log.w(TAG, "照片后期处理失败", e)
+        }
     }
 
     // ---------- 倒计时拍摄 ----------
@@ -435,12 +519,67 @@ class MainActivity : AppCompatActivity() {
         bindUseCases()
     }
 
-    private fun toggleGrid() {
-        gridOn = !gridOn
-        binding.gridOverlay.visibility = if (gridOn) View.VISIBLE else View.GONE
+    /** 参考线三态循环：关闭 → 九宫格 → 十字 */
+    private fun cycleGrid() {
+        gridMode = when (gridMode) {
+            GridOverlayView.MODE_OFF -> GridOverlayView.MODE_THIRDS
+            GridOverlayView.MODE_THIRDS -> GridOverlayView.MODE_CROSS
+            else -> GridOverlayView.MODE_OFF
+        }
+        updateGridUi()
+    }
+
+    private fun updateGridUi() {
+        binding.gridOverlay.mode = gridMode
         binding.btnGrid.setImageResource(
-            if (gridOn) R.drawable.ic_grid else R.drawable.ic_grid_off
+            if (gridMode == GridOverlayView.MODE_OFF) R.drawable.ic_grid_off
+            else R.drawable.ic_grid
         )
+    }
+
+    // ---------- 画幅比 ----------
+
+    /** 画幅比循环：4:3 → 16:9 → 1:1（1:1 拍摄后中心裁剪） */
+    private fun cycleAspect() {
+        aspectRatio = when (aspectRatio) {
+            ASPECT_4_3 -> ASPECT_16_9
+            ASPECT_16_9 -> ASPECT_1_1
+            else -> ASPECT_4_3
+        }
+        updateAspectUi()
+        bindUseCases() // 16:9 需要重建 ImageCapture
+    }
+
+    private fun updateAspectUi() {
+        binding.btnAspect.text = when (aspectRatio) {
+            ASPECT_16_9 -> getString(R.string.aspect_16_9)
+            ASPECT_1_1 -> getString(R.string.aspect_1_1)
+            else -> getString(R.string.aspect_4_3)
+        }
+    }
+
+    // ---------- 设置弹窗 ----------
+
+    private fun showSettings() {
+        val view = DialogSettingsBinding.inflate(LayoutInflater.from(this))
+        view.switchMirror.isChecked = mirrorSelfie
+        view.switchShutterSound.isChecked = shutterSound
+        view.switchTapCapture.isChecked = tapCapture
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_title)
+            .setView(view.root)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                mirrorSelfie = view.switchMirror.isChecked
+                shutterSound = view.switchShutterSound.isChecked
+                tapCapture = view.switchTapCapture.isChecked
+                prefs.edit()
+                    .putBoolean(KEY_MIRROR, mirrorSelfie)
+                    .putBoolean(KEY_SHUTTER_SOUND, shutterSound)
+                    .putBoolean(KEY_TAP_CAPTURE, tapCapture)
+                    .apply()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     // ---------- 曝光补偿 ----------
@@ -494,7 +633,11 @@ class MainActivity : AppCompatActivity() {
             this,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    focusAt(e.x, e.y)
+                    if (tapCapture && photoMode && recording == null) {
+                        onShutter()
+                    } else {
+                        focusAt(e.x, e.y)
+                    }
                     return true
                 }
             }
@@ -577,5 +720,14 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "AngelaCam"
+
+        private const val PREFS_NAME = "angelacam_settings"
+        private const val KEY_MIRROR = "mirror_selfie"
+        private const val KEY_SHUTTER_SOUND = "shutter_sound"
+        private const val KEY_TAP_CAPTURE = "tap_capture"
+
+        private const val ASPECT_4_3 = 0
+        private const val ASPECT_16_9 = 1
+        private const val ASPECT_1_1 = 2
     }
 }

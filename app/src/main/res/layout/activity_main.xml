@@ -57,6 +57,17 @@
             android:textColor="#FFFFFF"
             android:textSize="15sp" />
 
+        <Button
+            android:id="@+id/btnAspect"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:minWidth="56dp"
+            android:background="@android:color/transparent"
+            android:text="@string/aspect_4_3"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:contentDescription="@string/desc_aspect" />
+
         <ImageButton
             android:id="@+id/btnGrid"
             android:layout_width="48dp"
@@ -64,6 +75,14 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/desc_grid"
             android:src="@drawable/ic_grid_off" />
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/desc_settings"
+            android:src="@drawable/ic_settings" />
 
         <Space
             android:layout_width="0dp"

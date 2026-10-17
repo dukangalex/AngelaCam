@@ -37,9 +37,11 @@ class DetailActivity : AppCompatActivity() {
         binding.btnBack.setOnClickListener { finish() }
         binding.btnDelete.setOnClickListener { confirmDelete() }
         binding.btnShare.setOnClickListener { share() }
+        binding.btnEdit.setOnClickListener { openEditor() }
 
         if (mime.startsWith("video")) {
             binding.videoView.visibility = View.VISIBLE
+            binding.btnEdit.visibility = View.GONE
             binding.videoView.setVideoURI(uri)
             val controller = MediaController(this)
             controller.setAnchorView(binding.videoView)
@@ -79,6 +81,18 @@ class DetailActivity : AppCompatActivity() {
             Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show()
         }
         finish()
+    }
+
+    private fun openEditor() {
+        val u = uri ?: return
+        if (mime.startsWith("video")) {
+            Toast.makeText(this, "视频暂不支持编辑", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, EditActivity::class.java).apply {
+            putExtra(EditActivity.EXTRA_URI, u.toString())
+        }
+        startActivity(intent)
     }
 
     private fun share() {
