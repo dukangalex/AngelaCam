@@ -25,7 +25,8 @@ android {
     if (releaseKeystorePath != null) {
         signingConfigs {
             create("release") {
-                storeFile = file(releaseKeystorePath)
+                // 相对仓库根目录解析（workflow 把 keystore 还原到 <root>/app/release.keystore）
+                storeFile = rootProject.file(releaseKeystorePath)
                 storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("RELEASE_KEY_ALIAS")
                 keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
