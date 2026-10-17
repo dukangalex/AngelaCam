@@ -28,13 +28,22 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      # 正式签名：keystore 以 base64 存于 Secrets，构建时还原（绝不进仓库）
+      - name: Restore release keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
-      - name: Publish dev APK to release
+      - name: Build release APK
+        run: gradle :app:assembleRelease --stacktrace
+        env:
+          RELEASE_KEYSTORE_PATH: app/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Publish release APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev-latest
-          name: "最新开发版"
-          body: "自动构建的最新开发版 APK（debug 签名，可直接安装体验）。"
-          files: app/build/outputs/apk/debug/app-debug.apk
+          name: "最新版"
+          body: "正式签名的 release 版 APK，可直接安装；后续版本可覆盖更新。"
+          files: app/build/outputs/apk/release/app-release.apk
