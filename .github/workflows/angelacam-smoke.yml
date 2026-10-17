@@ -35,39 +35,22 @@ jobs:
           arch: x86_64
           profile: pixel_4
           script: |
-            # 注意：此脚本跑在 dash 下，不支持 pipefail，用 set -eu + 显式 exit 1
-            set -eu
+            # 注意：android-emulator-runner 是逐行 sh -c 执行的——
+            # 变量跨行不保留、多行 if/fi 会被拆散，所以每行必须自包含、包名写死
             adb install -r app-release.apk
-            PKG=com.dukangalex.angelacam
-            # 预授权，跳过运行时权限弹窗
-            adb shell pm grant $PKG android.permission.CAMERA || true
-            adb shell pm grant $PKG android.permission.RECORD_AUDIO || true
-            adb shell am start -n $PKG/.MainActivity
+            adb shell pm grant com.dukangalex.angelacam android.permission.CAMERA || true
+            adb shell pm grant com.dukangalex.angelacam android.permission.RECORD_AUDIO || true
+            adb shell am start -n com.dukangalex.angelacam/.MainActivity
             sleep 8
             adb exec-out screencap -p > smoke-launch.png
-            # 1) 进程存活 = 未闪退
-            if ! adb shell pidof "$PKG" > /dev/null; then
-              echo "APP_NOT_ALIVE"
-              exit 1
-            fi
-            echo "APP_ALIVE_OK"
-            # 2) "打开方式" intent 解析：VIEW 图片/视频必须能解析到 AngelaCam
+            adb shell pidof com.dukangalex.angelacam > /dev/null || { echo APP_NOT_ALIVE; exit 1; }
+            echo APP_ALIVE_OK
             adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t image/jpeg > view-image.txt
             cat view-image.txt
-            if grep -qi angelacam view-image.txt; then
-              echo "VIEW_IMAGE_OK"
-            else
-              echo "VIEW_IMAGE_MISSING"
-              exit 1
-            fi
+            grep -qi angelacam view-image.txt && echo VIEW_IMAGE_OK || { echo VIEW_IMAGE_MISSING; exit 1; }
             adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t video/mp4 > view-video.txt
             cat view-video.txt
-            if grep -qi angelacam view-video.txt; then
-              echo "VIEW_VIDEO_OK"
-            else
-              echo "VIEW_VIDEO_MISSING"
-              exit 1
-            fi
+            grep -qi angelacam view-video.txt && echo VIEW_VIDEO_OK || { echo VIEW_VIDEO_MISSING; exit 1; }
 
       - name: Upload screenshot
         if: always()
