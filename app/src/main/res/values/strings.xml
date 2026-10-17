@@ -71,4 +71,18 @@
     <string name="type_photo">照片</string>
     <string name="type_video">视频</string>
     <string name="dialog_ok">确定</string>
+    <string name="desc_about">关于</string>
+    <string name="about_title">关于 AngelaCam</string>
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_intro_title">简介</string>
+    <string name="about_intro_body">保护隐私的原生 Android 相机：拍照、录像、自带相册与照片编辑器，常用调节参数齐全。</string>
+    <string name="about_privacy_title">隐私保护</string>
+    <string name="about_privacy_body">• 不申请联网权限，从根上杜绝上传\n• 不记录拍摄位置\n• 麦克风仅在录像时按需申请，拒绝则静音录制\n• 相册只收录本应用拍摄的内容</string>
+    <string name="about_update_title">手动更新</string>
+    <string name="about_update_body">本应用不联网，没有自动更新。新版本发布后，请前往 GitHub Releases 页面下载安装包，覆盖安装即可（签名一致，无需卸载）。</string>
+    <string name="about_open_releases">前往下载新版本</string>
+    <string name="about_license_title">开源许可</string>
+    <string name="about_license_body">本应用以 GPL-3.0 许可证开源。</string>
+    <string name="about_copyright">Copyright (C) 2026 dukangalex</string>
+    <string name="settings_about">关于 AngelaCam</string>
 </resources>

@@ -565,6 +565,9 @@ class MainActivity : AppCompatActivity() {
         view.switchMirror.isChecked = mirrorSelfie
         view.switchShutterSound.isChecked = shutterSound
         view.switchTapCapture.isChecked = tapCapture
+        view.btnAbout.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
+        }
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_title)
             .setView(view.root)
