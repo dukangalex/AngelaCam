@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
     private var mirrorSelfie = true
     private var shutterSound = true
     private var tapCapture = false
+    private var autoUpdateCheck = false
 
     private lateinit var prefs: SharedPreferences
     private var mediaActionSound: MediaActionSound? = null
@@ -126,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         mirrorSelfie = prefs.getBoolean(KEY_MIRROR, true)
         shutterSound = prefs.getBoolean(KEY_SHUTTER_SOUND, true)
         tapCapture = prefs.getBoolean(KEY_TAP_CAPTURE, false)
+        autoUpdateCheck = prefs.getBoolean(KEY_AUTO_UPDATE, false)
         mediaActionSound = MediaActionSound().apply {
             load(MediaActionSound.SHUTTER_CLICK)
         }
@@ -147,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         updateGridUi()
 
         requestPermissionsIfNeeded()
+        maybeAutoCheckUpdate()
     }
 
     override fun onResume() {
@@ -565,6 +568,7 @@ class MainActivity : AppCompatActivity() {
         view.switchMirror.isChecked = mirrorSelfie
         view.switchShutterSound.isChecked = shutterSound
         view.switchTapCapture.isChecked = tapCapture
+        view.switchAutoUpdate.isChecked = autoUpdateCheck
         view.btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
         }
@@ -575,14 +579,34 @@ class MainActivity : AppCompatActivity() {
                 mirrorSelfie = view.switchMirror.isChecked
                 shutterSound = view.switchShutterSound.isChecked
                 tapCapture = view.switchTapCapture.isChecked
+                autoUpdateCheck = view.switchAutoUpdate.isChecked
                 prefs.edit()
                     .putBoolean(KEY_MIRROR, mirrorSelfie)
                     .putBoolean(KEY_SHUTTER_SOUND, shutterSound)
                     .putBoolean(KEY_TAP_CAPTURE, tapCapture)
+                    .putBoolean(KEY_AUTO_UPDATE, autoUpdateCheck)
                     .apply()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * 启动时自动检查更新（默认关闭，用户在设置中开启后才生效；
+     * 每天最多检查一次，只连接 GitHub）
+     */
+    private fun maybeAutoCheckUpdate() {
+        if (!autoUpdateCheck) return
+        val now = System.currentTimeMillis()
+        val last = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0)
+        if (now - last < 24 * 60 * 60 * 1000L) return
+        cameraExecutor.execute {
+            val result = UpdateChecker.check(this)
+            prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, now).apply()
+            if (result is UpdateChecker.Result.Available) {
+                runOnUiThread { UpdateInstaller.promptUpdate(this, result.info) }
+            }
+        }
     }
 
     // ---------- 曝光补偿 ----------
@@ -728,6 +752,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_MIRROR = "mirror_selfie"
         private const val KEY_SHUTTER_SOUND = "shutter_sound"
         private const val KEY_TAP_CAPTURE = "tap_capture"
+        private const val KEY_AUTO_UPDATE = "auto_update_check"
+        private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
 
         private const val ASPECT_4_3 = 0
         private const val ASPECT_16_9 = 1

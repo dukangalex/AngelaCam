@@ -121,6 +121,24 @@
                 android:lineSpacingExtra="4dp" />
 
             <Button
+                android:id="@+id/btnCheckUpdate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="#4CAF50"
+                android:text="@string/about_check_update"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/tvUpdateStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <Button
                 android:id="@+id/btnOpenReleases"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
