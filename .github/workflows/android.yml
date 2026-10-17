@@ -4,6 +4,11 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '正式版 tag（如 v1.0.0）；留空则只更新 dev-latest'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -40,10 +45,20 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      - name: Publish release APK
+      - name: Publish dev-latest
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev-latest
           name: "最新版"
           body: "正式签名的 release 版 APK，可直接安装；后续版本可覆盖更新。"
+          files: app/build/outputs/apk/release/app-release.apk
+
+      # 手动触发且填了版本号时，额外发布正式版 release（tag 自动创建，说明取自 RELEASE_NOTES.md）
+      - name: Publish versioned release
+        if: ${{ inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
+          body_path: RELEASE_NOTES.md
           files: app/build/outputs/apk/release/app-release.apk
