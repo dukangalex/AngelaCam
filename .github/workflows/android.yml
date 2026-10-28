@@ -31,7 +31,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          # AGP 9.1.1 需要 Gradle 9.x（原 8.7 是 AGP 8.5 时代的，2026-10-28 随工具链升级同步）
+          gradle-version: '9.3.1'
 
       # 正式签名：keystore 以 base64 存于 Secrets，构建时还原（绝不进仓库）
       - name: Restore release keystore

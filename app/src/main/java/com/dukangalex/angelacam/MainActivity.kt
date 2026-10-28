@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Log
 import android.util.Size
 import android.view.GestureDetector
@@ -61,6 +62,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
 
+    /** 非相机后台活（缩略图、拍照后期、更新检查）专用，避免挤占拍照回调线程 */
+    private lateinit var backgroundExecutor: ExecutorService
+    private var cameraStarted = false
+
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
@@ -103,16 +108,41 @@ class MainActivity : AppCompatActivity() {
                 startCamera()
                 updateThumbnail()
             } else {
-                Toast.makeText(this, "需要相机权限才能使用", Toast.LENGTH_LONG).show()
-                finish()
+                showCameraPermissionDenied()
             }
         }
+
+    /**
+     * 相机权限被拒：不直接退出（勾过「不再询问」时每次打开都像闪退），
+     * 给出去系统设置的补救路径；用户从设置回来后 onResume 会自动启动相机。
+     */
+    private fun showCameraPermissionDenied() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.perm_camera_title)
+            .setMessage(R.string.perm_camera_message)
+            .setPositiveButton(R.string.perm_go_settings) { _, _ ->
+                try {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "打开应用设置失败", e)
+                    finish()
+                }
+            }
+            .setNegativeButton(R.string.perm_exit) { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
 
     /** 麦克风权限：只在用户第一次按下录像键时申请（最小权限原则） */
     private val audioPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) {
-                Toast.makeText(this, "已拒绝麦克风权限，将静音录制", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.toast_mic_denied, Toast.LENGTH_SHORT).show()
             }
             startRecording(withAudio = granted)
         }
@@ -122,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         cameraExecutor = Executors.newSingleThreadExecutor()
+        backgroundExecutor = Executors.newSingleThreadExecutor()
 
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         mirrorSelfie = prefs.getBoolean(KEY_MIRROR, true)
@@ -154,6 +185,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 从系统设置补开权限回来时自动启动相机，不用用户重启应用
+        if (!cameraStarted && hasCameraPermission()) startCamera()
         if (hasCameraPermission()) updateThumbnail()
     }
 
@@ -162,6 +195,7 @@ class MainActivity : AppCompatActivity() {
         uiHandler.removeCallbacks(timerRunnable)
         uiHandler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
+        backgroundExecutor.shutdown()
         mediaActionSound?.release()
         mediaActionSound = null
     }
@@ -206,6 +240,7 @@ class MainActivity : AppCompatActivity() {
     // ---------- 相机启动与绑定 ----------
 
     private fun startCamera() {
+        cameraStarted = true
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
             cameraProvider = providerFuture.get()
@@ -242,7 +277,7 @@ class MainActivity : AppCompatActivity() {
             setupExposureBar()
         } catch (e: Exception) {
             Log.e(TAG, "绑定相机用例失败", e)
-            Toast.makeText(this, "相机启动失败", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_camera_start_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -287,13 +322,17 @@ class MainActivity : AppCompatActivity() {
         capture.takePicture(output, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(results: ImageCapture.OutputFileResults) {
                 results.savedUri?.let { uri ->
-                    // v1.1.0: 1:1 画幅中心裁剪 / 前置自拍镜像
-                    postProcessPhoto(uri)
-                    CaptureStore.add(this@MainActivity, uri, "image/jpeg", name)
+                    // 后期处理（解码/裁剪/镜像）与记录写入移到后台线程，
+                    // 不占用拍照回调线程，快门恢复不等它
+                    backgroundExecutor.execute {
+                        // v1.1.0: 1:1 画幅中心裁剪 / 前置自拍镜像
+                        postProcessPhoto(uri)
+                        CaptureStore.add(this@MainActivity, uri, "image/jpeg", name)
+                    }
                 }
                 runOnUiThread {
                     binding.btnShutter.isEnabled = true
-                    Toast.makeText(this@MainActivity, "已保存到相册", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, R.string.toast_photo_saved, Toast.LENGTH_SHORT).show()
                     updateThumbnail()
                 }
             }
@@ -301,7 +340,8 @@ class MainActivity : AppCompatActivity() {
             override fun onError(exc: ImageCaptureException) {
                 runOnUiThread {
                     binding.btnShutter.isEnabled = true
-                    Toast.makeText(this@MainActivity, "拍照失败：${exc.message}", Toast.LENGTH_SHORT).show()
+                    // 只给用户看人话，异常原文只进日志
+                    Toast.makeText(this@MainActivity, R.string.toast_photo_failed, Toast.LENGTH_SHORT).show()
                 }
                 Log.e(TAG, "拍照失败", exc)
             }
@@ -318,10 +358,19 @@ class MainActivity : AppCompatActivity() {
         val needMirror = mirrorSelfie && lensFacing == CameraSelector.LENS_FACING_FRONT
         if (!needCrop && !needMirror) return
         try {
-            val input = contentResolver.openInputStream(uri) ?: return
-            val src = BitmapFactory.decodeStream(input)
-            input.close()
-            if (src == null) return
+            // 采样解码，上限 4096（与编辑器保存管线一致）：原先全分辨率解码，
+            // 高像素机型单张位图可达上百 MB，有 OOM 后静默跳过裁剪/镜像的风险
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
+            var sample = 1
+            val maxSrc = maxOf(bounds.outWidth, bounds.outHeight)
+            while (maxSrc / sample > 4096) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            val src = contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, opts)
+            } ?: return
             var out = src
             if (needCrop) {
                 val side = minOf(out.width, out.height)
@@ -438,7 +487,7 @@ class MainActivity : AppCompatActivity() {
         recordStartMs = SystemClock.elapsedRealtime()
         uiHandler.post(timerRunnable)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        Toast.makeText(this, "开始录像", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.toast_record_start, Toast.LENGTH_SHORT).show()
     }
 
     private fun onRecordFinalize(event: VideoRecordEvent.Finalize, name: String) {
@@ -450,10 +499,10 @@ class MainActivity : AppCompatActivity() {
             event.outputResults.outputUri.let { uri ->
                 CaptureStore.add(this, uri, "video/mp4", name)
             }
-            Toast.makeText(this, "视频已保存到相册", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_video_saved, Toast.LENGTH_SHORT).show()
             updateThumbnail()
         } else {
-            Toast.makeText(this, "录像失败：${event.error}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_record_failed, Toast.LENGTH_SHORT).show()
             Log.e(TAG, "录像失败 cause=${event.cause}", event.cause)
         }
     }
@@ -462,7 +511,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleMode() {
         if (recording != null) {
-            Toast.makeText(this, "录像中，无法切换模式", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_recording_mode, Toast.LENGTH_SHORT).show()
             return
         }
         photoMode = !photoMode
@@ -510,7 +559,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchCamera() {
         if (recording != null) {
-            Toast.makeText(this, "录像中，无法切换摄像头", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_recording_switch, Toast.LENGTH_SHORT).show()
             return
         }
         lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
@@ -600,7 +649,7 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val last = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0)
         if (now - last < 24 * 60 * 60 * 1000L) return
-        cameraExecutor.execute {
+        backgroundExecutor.execute {
             val result = UpdateChecker.check(this)
             prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, now).apply()
             if (result is UpdateChecker.Result.Available) {
@@ -719,9 +768,10 @@ class MainActivity : AppCompatActivity() {
     /** 缩略图只显示本应用自己的拍摄记录（无需存储读取权限） */
     private fun updateThumbnail() {
         if (!hasCameraPermission()) return
-        cameraExecutor.execute {
+        backgroundExecutor.execute {
             try {
-                val latest = CaptureStore.list(this).firstOrNull()
+                // 只取最新一条（快路径），不再每次全量扫描记录表
+                val latest = CaptureStore.latest(this)
                 if (latest == null) {
                     runOnUiThread { binding.btnThumbnail.setImageDrawable(null) }
                     return@execute

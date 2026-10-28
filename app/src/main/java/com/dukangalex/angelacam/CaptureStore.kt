@@ -53,6 +53,27 @@ object CaptureStore {
     }
 
     /**
+     * 只取最新一条仍然存在的记录（给主界面缩略图用）：
+     * 从最新开始逐条探活，命中即返回，不做全量扫描、不写回文件，
+     * 避免记录攒多后每次拍照都为取一张缩略图付出全表探测的代价。
+     * 失效条目的清理留给全量 list() 时顺带完成。
+     */
+    @Synchronized
+    fun latest(context: Context): Item? {
+        val items = readRaw(context)
+        val resolver = context.contentResolver
+        for (item in items) {
+            try {
+                resolver.openInputStream(Uri.parse(item.uri))?.close()
+                return item
+            } catch (e: Exception) {
+                // 已被删除，继续往后找
+            }
+        }
+        return null
+    }
+
+    /**
      * 返回仍然存在的拍摄记录（自动清理已被用户在别处删除的条目）。
      * 新的在前。
      */
@@ -83,7 +104,14 @@ object CaptureStore {
     private fun readRaw(context: Context): List<Item> {
         val f = file(context)
         if (!f.exists()) return emptyList()
-        val arr = JSONArray(f.readText())
+        // 文件损坏（写入中断、存储异常）时按空记录处理并自愈，
+        // 绝不让一次坏写变成相册/详情页每次打开必崩
+        val arr = try {
+            JSONArray(f.readText())
+        } catch (e: Exception) {
+            Log.w(TAG, "拍摄记录文件损坏，按空处理", e)
+            return emptyList()
+        }
         val out = mutableListOf<Item>()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
@@ -110,6 +138,14 @@ object CaptureStore {
                     .put("name", item.name)
             )
         }
-        file(context).writeText(arr.toString())
+        // 原子写：先写临时文件再 rename 替换，进程被杀/断电也不会留下半截文件
+        val target = file(context)
+        val tmp = File(target.parentFile, "$FILE_NAME.tmp")
+        tmp.writeText(arr.toString())
+        if (!tmp.renameTo(target)) {
+            // 极少数文件系统 rename 失败时退回直写，保证功能可用
+            target.writeText(arr.toString())
+            tmp.delete()
+        }
     }
 }

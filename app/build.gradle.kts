@@ -1,16 +1,16 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9 起 Kotlin 支持内建，不再应用 org.jetbrains.kotlin.android 插件
 }
 
 android {
     namespace = "com.dukangalex.angelacam"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.dukangalex.angelacam"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 8
         versionName = "1.6.0"
 
@@ -50,17 +50,20 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         viewBinding = true
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     // 注意：CameraX 没有 BOM，各组件用统一版本号
-    val cameraxVersion = "1.3.4"
+    val cameraxVersion = "1.6.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
@@ -74,4 +77,6 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.viewpager2:viewpager2:1.0.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+
+    testImplementation("junit:junit:4.13.2")
 }

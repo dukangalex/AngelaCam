@@ -20,6 +20,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.dukangalex.angelacam.databinding.ActivityEditBinding
@@ -55,6 +56,22 @@ class EditActivity : AppCompatActivity() {
         private const val TOOL_ROTATE = 1
         private const val TOOL_FILTER = 2
         private const val TOOL_ADJUST = 3
+
+        private const val STATE_CROP_W = "crop_w"
+        private const val STATE_CROP_H = "crop_h"
+        private const val STATE_ROTATION = "rotation"
+        private const val STATE_STRAIGHTEN = "straighten"
+        private const val STATE_FLIP_H = "flip_h"
+        private const val STATE_FLIP_V = "flip_v"
+        private const val STATE_FILTER = "filter"
+        private const val STATE_EXPOSURE = "exposure"
+        private const val STATE_BRIGHTNESS = "brightness"
+        private const val STATE_CONTRAST = "contrast"
+        private const val STATE_HIGHLIGHTS = "highlights"
+        private const val STATE_SHADOWS = "shadows"
+        private const val STATE_TEMPERATURE = "temperature"
+        private const val STATE_TINT = "tint"
+        private const val STATE_SATURATION = "saturation"
     }
 
     private lateinit var binding: ActivityEditBinding
@@ -112,7 +129,10 @@ class EditActivity : AppCompatActivity() {
             binding.btnCropScreen.visibility = View.VISIBLE
         }
 
-        binding.btnCancel.setOnClickListener { finish() }
+        binding.btnCancel.setOnClickListener { attemptExit() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = attemptExit()
+        })
         binding.btnSave.setOnClickListener {
             if (wallpaperMode) applyAsWallpaper() else save()
         }
@@ -168,8 +188,12 @@ class EditActivity : AppCompatActivity() {
         binding.btnAutoEnhance.setOnClickListener { autoEnhance() }
         binding.btnReset.setOnClickListener { resetAll() }
 
-        markCropSelected(binding.btnCropOriginal)
-        setFilter(0, binding.btnFilterNone)
+        if (savedInstanceState == null) {
+            markCropSelected(binding.btnCropOriginal)
+            setFilter(0, binding.btnFilterNone)
+        } else {
+            restoreEditState(savedInstanceState)
+        }
         showTool(TOOL_CROP)
 
         executor.execute {
@@ -177,10 +201,10 @@ class EditActivity : AppCompatActivity() {
                 originalBitmap = loadBitmap(uri, MAX_SIZE)
                 runOnUiThread {
                     if (originalBitmap == null) {
-                        Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, R.string.toast_image_load_failed, Toast.LENGTH_SHORT).show()
                         finish()
                     } else {
-                        if (wallpaperMode) {
+                        if (wallpaperMode && savedInstanceState == null) {
                             setCrop(screenRatioW, screenRatioH)
                             markCropSelected(binding.btnCropScreen)
                         } else {
@@ -191,7 +215,7 @@ class EditActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "加载图片失败", e)
                 runOnUiThread {
-                    Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.toast_image_load_failed, Toast.LENGTH_SHORT).show()
                     finish()
                 }
             }
@@ -201,9 +225,90 @@ class EditActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         executor.shutdown()
-        originalBitmap?.recycle()
-        workingBitmap?.let { if (it !== originalBitmap) it.recycle() }
-        tonalBitmap?.let { if (it !== workingBitmap && it !== originalBitmap) it.recycle() }
+        // 不手工 recycle 三张共享位图：后台任务（LUT/自动增强）可能仍在读取，
+        // 手工回收与之竞态会 use-after-recycle 崩溃；页面退出后由 GC 回收即可
+    }
+
+    // ---------- 状态保存（深色模式切换/进程重建不丢编辑成果） ----------
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putFloat(STATE_CROP_W, cropRatioW)
+        outState.putFloat(STATE_CROP_H, cropRatioH)
+        outState.putInt(STATE_ROTATION, rotation)
+        outState.putFloat(STATE_STRAIGHTEN, straightenDeg)
+        outState.putBoolean(STATE_FLIP_H, flipH)
+        outState.putBoolean(STATE_FLIP_V, flipV)
+        outState.putInt(STATE_FILTER, filterIndex)
+        outState.putInt(STATE_EXPOSURE, exposure)
+        outState.putInt(STATE_BRIGHTNESS, brightness)
+        outState.putInt(STATE_CONTRAST, contrast)
+        outState.putInt(STATE_HIGHLIGHTS, highlights)
+        outState.putInt(STATE_SHADOWS, shadows)
+        outState.putInt(STATE_TEMPERATURE, temperature)
+        outState.putInt(STATE_TINT, tint)
+        outState.putInt(STATE_SATURATION, saturation)
+    }
+
+    private fun restoreEditState(state: Bundle) {
+        cropRatioW = state.getFloat(STATE_CROP_W, 0f)
+        cropRatioH = state.getFloat(STATE_CROP_H, 0f)
+        rotation = state.getInt(STATE_ROTATION, 0)
+        straightenDeg = state.getFloat(STATE_STRAIGHTEN, 0f)
+        flipH = state.getBoolean(STATE_FLIP_H, false)
+        flipV = state.getBoolean(STATE_FLIP_V, false)
+        filterIndex = state.getInt(STATE_FILTER, 0)
+        exposure = state.getInt(STATE_EXPOSURE, 0)
+        brightness = state.getInt(STATE_BRIGHTNESS, 0)
+        contrast = state.getInt(STATE_CONTRAST, 100)
+        highlights = state.getInt(STATE_HIGHLIGHTS, 0)
+        shadows = state.getInt(STATE_SHADOWS, 0)
+        temperature = state.getInt(STATE_TEMPERATURE, 0)
+        tint = state.getInt(STATE_TINT, 0)
+        saturation = state.getInt(STATE_SATURATION, 100)
+        syncAdjustSeeks()
+        binding.seekStraighten.progress = (straightenDeg * 2 + 90).roundToInt()
+        markCropSelected(cropButtonForState())
+        highlightSelected(filterButtons(), filterButtonForState())
+    }
+
+    private fun cropButtonForState(): Button = when {
+        cropRatioW == 0f && cropRatioH == 0f -> binding.btnCropOriginal
+        cropRatioW == 1f && cropRatioH == 1f -> binding.btnCrop11
+        cropRatioW == 4f && cropRatioH == 3f -> binding.btnCrop43
+        cropRatioW == 3f && cropRatioH == 2f -> binding.btnCrop32
+        cropRatioW == 16f && cropRatioH == 9f -> binding.btnCrop169
+        cropRatioW == 4f && cropRatioH == 5f -> binding.btnCrop45
+        cropRatioW == 9f && cropRatioH == 16f -> binding.btnCrop916
+        else -> binding.btnCropScreen
+    }
+
+    private fun filterButtonForState(): Button =
+        filterButtons().getOrElse(filterIndex) { binding.btnFilterNone }
+
+    private fun filterButtons(): List<Button> = listOf(
+        binding.btnFilterNone, binding.btnFilterBw, binding.btnFilterSepia,
+        binding.btnFilterCool, binding.btnFilterWarm, binding.btnFilterVivid
+    )
+
+    /** 是否有未保存的编辑（结构/滤镜/任一调节不等于默认值） */
+    private fun isEdited(): Boolean =
+        cropRatioW > 0f || rotation != 0 || straightenDeg != 0f || flipH || flipV ||
+            filterIndex != 0 || !isTonalNeutral() ||
+            temperature != 0 || tint != 0 || saturation != 100
+
+    /** 退出前确认：有未保存编辑时先问一句，避免误触丢成果 */
+    private fun attemptExit() {
+        if (!isEdited()) {
+            finish()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.edit_discard_title)
+            .setMessage(R.string.edit_discard_message)
+            .setPositiveButton(R.string.edit_discard_ok) { _, _ -> finish() }
+            .setNegativeButton(R.string.edit_discard_cancel, null)
+            .show()
     }
 
     // ---------- 加载（含 EXIF 摆正） ----------
@@ -290,11 +395,7 @@ class EditActivity : AppCompatActivity() {
 
     private fun setFilter(index: Int, button: Button) {
         filterIndex = index
-        val buttons = listOf(
-            binding.btnFilterNone, binding.btnFilterBw, binding.btnFilterSepia,
-            binding.btnFilterCool, binding.btnFilterWarm, binding.btnFilterVivid
-        )
-        highlightSelected(buttons, button)
+        highlightSelected(filterButtons(), button)
         updatePreview()
     }
 
@@ -312,9 +413,8 @@ class EditActivity : AppCompatActivity() {
     private fun rebuildWorking() {
         val src = originalBitmap ?: return
         val built = applyStructure(src)
-        workingBitmap?.let { if (it !== originalBitmap && it !== built) it.recycle() }
+        // 旧工作图不手工回收：后台 LUT/增强任务可能正在读它（见 onDestroy 说明）
         workingBitmap = built
-        tonalBitmap?.recycle()
         tonalBitmap = null
         refreshTonalPreview()
     }
@@ -434,23 +534,21 @@ class EditActivity : AppCompatActivity() {
     private fun refreshTonalPreview() {
         val src = workingBitmap ?: return
         if (isTonalNeutral()) {
-            tonalBitmap?.recycle()
             tonalBitmap = null
             updatePreview()
             return
         }
         val gen = ++tonalGen
         executor.execute {
+            // 排队期间参数又变了就直接跳过，不再整帧算完才丢弃（防拖动滑杆排队滞后）
+            if (gen != tonalGen) return@execute
             val result = applyLut(src)
             runOnUiThread {
                 if (gen == tonalGen && workingBitmap === src) {
-                    val old = tonalBitmap
                     tonalBitmap = result
-                    if (old != null && old !== src) old.recycle()
                     updatePreview()
-                } else {
-                    result.recycle()
                 }
+                // 过期结果不手工回收，交给 GC（与共享位图的竞态考量一致）
             }
         }
     }
@@ -658,11 +756,7 @@ class EditActivity : AppCompatActivity() {
         binding.seekStraighten.progress = 90
         syncAdjustSeeks()
         markCropSelected(binding.btnCropOriginal)
-        val filterButtons = listOf(
-            binding.btnFilterNone, binding.btnFilterBw, binding.btnFilterSepia,
-            binding.btnFilterCool, binding.btnFilterWarm, binding.btnFilterVivid
-        )
-        highlightSelected(filterButtons, binding.btnFilterNone)
+        highlightSelected(filterButtons(), binding.btnFilterNone)
         rebuildWorking()
         Toast.makeText(this, R.string.edit_reset_done, Toast.LENGTH_SHORT).show()
     }
@@ -736,7 +830,7 @@ class EditActivity : AppCompatActivity() {
                 Log.e(TAG, "保存失败", e)
                 runOnUiThread {
                     binding.btnSave.isEnabled = true
-                    Toast.makeText(this, "保存失败：${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.toast_save_failed, Toast.LENGTH_SHORT).show()
                 }
             }
         }
