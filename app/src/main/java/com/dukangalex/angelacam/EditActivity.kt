@@ -9,11 +9,13 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.SeekBar
@@ -24,12 +26,20 @@ import com.dukangalex.angelacam.databinding.ActivityEditBinding
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * 照片编辑器（仅照片）：
- * 裁剪（原图/1:1/4:3/16:9 中心裁剪）、旋转（左右 90°）、镜像、
- * 滤镜（6 种）、调节（亮度/对比度/饱和度）。
- * 结构编辑基于原图重建（无损撤销）；色彩编辑实时预览；保存为新副本。
+ * 裁剪（中心裁剪，多比例）、旋转（90° + 拉正微调 ±45°）、水平/垂直镜像、
+ * 滤镜（6 种）、调节（曝光/亮度/对比度/高光/阴影/色温/色调/饱和度）、
+ * 一键自动增强、按住对比原图、一键重置。
+ * 结构编辑基于原图重建；预览用降采样图，保存时按全分辨率（上限 4096）重走同一管线，
+ * 避免编辑保存把照片压小。外部图片按 EXIF 方向自动摆正。
  */
 class EditActivity : AppCompatActivity() {
 
@@ -39,6 +49,7 @@ class EditActivity : AppCompatActivity() {
         const val EXTRA_WALLPAPER_MODE = "extra_wallpaper_mode"
         private const val TAG = "EditPhoto"
         private const val MAX_SIZE = 2048
+        private const val SAVE_MAX_SIZE = 4096
 
         private const val TOOL_CROP = 0
         private const val TOOL_ROTATE = 1
@@ -49,8 +60,12 @@ class EditActivity : AppCompatActivity() {
     private lateinit var binding: ActivityEditBinding
     private val executor = Executors.newSingleThreadExecutor()
 
+    private var sourceUri: Uri? = null
     private var originalBitmap: Bitmap? = null
     private var workingBitmap: Bitmap? = null
+    /** 色调 LUT 处理后的预览图；为 null 表示直接用 workingBitmap */
+    private var tonalBitmap: Bitmap? = null
+    private var tonalGen = 0
 
     private var wallpaperMode = false
     private var screenRatioW = 0f
@@ -60,12 +75,19 @@ class EditActivity : AppCompatActivity() {
     private var cropRatioW = 0f // 0=原图
     private var cropRatioH = 0f
     private var rotation = 0 // 累计 0/90/180/270
-    private var flipped = false
+    private var straightenDeg = 0f // 拉正 -45..45
+    private var flipH = false
+    private var flipV = false
 
     // 色彩编辑状态
     private var filterIndex = 0
+    private var exposure = 0 // -100..100
     private var brightness = 0 // -100..100
     private var contrast = 100 // 0..200，100=1.0
+    private var highlights = 0 // -100..100
+    private var shadows = 0 // -100..100
+    private var temperature = 0 // -100..100，负=冷 正=暖
+    private var tint = 0 // -100..100，负=绿 正=品红
     private var saturation = 100 // 0..200，100=1.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,9 +101,9 @@ class EditActivity : AppCompatActivity() {
             return
         }
         val uri = Uri.parse(uriStr)
+        sourceUri = uri
         wallpaperMode = intent.getBooleanExtra(EXTRA_WALLPAPER_MODE, false)
         if (wallpaperMode) {
-            // 屏幕比例（竖屏），参照 Google 壁纸默认按屏幕裁剪
             val dm = resources.displayMetrics
             screenRatioW = dm.widthPixels.toFloat()
             screenRatioH = dm.heightPixels.toFloat()
@@ -94,6 +116,7 @@ class EditActivity : AppCompatActivity() {
         binding.btnSave.setOnClickListener {
             if (wallpaperMode) applyAsWallpaper() else save()
         }
+        setupCompareButton()
 
         binding.tabCrop.setOnClickListener { showTool(TOOL_CROP) }
         binding.tabRotate.setOnClickListener { showTool(TOOL_ROTATE) }
@@ -103,7 +126,10 @@ class EditActivity : AppCompatActivity() {
         binding.btnCropOriginal.setOnClickListener { setCrop(0f, 0f); markCropSelected(binding.btnCropOriginal) }
         binding.btnCrop11.setOnClickListener { setCrop(1f, 1f); markCropSelected(binding.btnCrop11) }
         binding.btnCrop43.setOnClickListener { setCrop(4f, 3f); markCropSelected(binding.btnCrop43) }
+        binding.btnCrop32.setOnClickListener { setCrop(3f, 2f); markCropSelected(binding.btnCrop32) }
         binding.btnCrop169.setOnClickListener { setCrop(16f, 9f); markCropSelected(binding.btnCrop169) }
+        binding.btnCrop45.setOnClickListener { setCrop(4f, 5f); markCropSelected(binding.btnCrop45) }
+        binding.btnCrop916.setOnClickListener { setCrop(9f, 16f); markCropSelected(binding.btnCrop916) }
         binding.btnCropScreen.setOnClickListener {
             setCrop(screenRatioW, screenRatioH)
             markCropSelected(binding.btnCropScreen)
@@ -111,7 +137,15 @@ class EditActivity : AppCompatActivity() {
 
         binding.btnRotateLeft.setOnClickListener { rotation = (rotation + 270) % 360; rebuildWorking() }
         binding.btnRotateRight.setOnClickListener { rotation = (rotation + 90) % 360; rebuildWorking() }
-        binding.btnFlip.setOnClickListener { flipped = !flipped; rebuildWorking() }
+        binding.btnFlip.setOnClickListener { flipH = !flipH; rebuildWorking() }
+        binding.btnFlipVertical.setOnClickListener { flipV = !flipV; rebuildWorking() }
+        binding.seekStraighten.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) straightenDeg = (progress - 90) / 2f
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) { rebuildWorking() }
+        })
 
         binding.btnFilterNone.setOnClickListener { setFilter(0, binding.btnFilterNone) }
         binding.btnFilterBw.setOnClickListener { setFilter(1, binding.btnFilterBw) }
@@ -120,9 +154,19 @@ class EditActivity : AppCompatActivity() {
         binding.btnFilterWarm.setOnClickListener { setFilter(4, binding.btnFilterWarm) }
         binding.btnFilterVivid.setOnClickListener { setFilter(5, binding.btnFilterVivid) }
 
-        setupAdjustSeek(binding.seekBrightness) { brightness = it - 100; updatePreview() }
-        setupAdjustSeek(binding.seekContrast) { contrast = it; updatePreview() }
+        // 色调类（走 LUT）：曝光/亮度/对比度/高光/阴影
+        setupAdjustSeek(binding.seekExposure) { exposure = it - 100; refreshTonalPreview() }
+        setupAdjustSeek(binding.seekBrightness) { brightness = it - 100; refreshTonalPreview() }
+        setupAdjustSeek(binding.seekContrast) { contrast = it; refreshTonalPreview() }
+        setupAdjustSeek(binding.seekHighlights) { highlights = it - 100; refreshTonalPreview() }
+        setupAdjustSeek(binding.seekShadows) { shadows = it - 100; refreshTonalPreview() }
+        // 矩阵类（实时 colorFilter）：色温/色调/饱和度
+        setupAdjustSeek(binding.seekTemperature) { temperature = it - 100; updatePreview() }
+        setupAdjustSeek(binding.seekTint) { tint = it - 100; updatePreview() }
         setupAdjustSeek(binding.seekSaturation) { saturation = it; updatePreview() }
+
+        binding.btnAutoEnhance.setOnClickListener { autoEnhance() }
+        binding.btnReset.setOnClickListener { resetAll() }
 
         markCropSelected(binding.btnCropOriginal)
         setFilter(0, binding.btnFilterNone)
@@ -130,14 +174,13 @@ class EditActivity : AppCompatActivity() {
 
         executor.execute {
             try {
-                originalBitmap = loadSampledBitmap(uri)
+                originalBitmap = loadBitmap(uri, MAX_SIZE)
                 runOnUiThread {
                     if (originalBitmap == null) {
                         Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
                         finish()
                     } else {
                         if (wallpaperMode) {
-                            // 壁纸模式默认按屏幕比例裁剪（参照 Google 壁纸）
                             setCrop(screenRatioW, screenRatioH)
                             markCropSelected(binding.btnCropScreen)
                         } else {
@@ -159,24 +202,52 @@ class EditActivity : AppCompatActivity() {
         super.onDestroy()
         executor.shutdown()
         originalBitmap?.recycle()
-        workingBitmap?.recycle()
+        workingBitmap?.let { if (it !== originalBitmap) it.recycle() }
+        tonalBitmap?.let { if (it !== workingBitmap && it !== originalBitmap) it.recycle() }
     }
 
-    // ---------- 加载 ----------
+    // ---------- 加载（含 EXIF 摆正） ----------
 
-    /** 按最大边 MAX_SIZE 采样解码，避免大图 OOM */
-    private fun loadSampledBitmap(uri: Uri): Bitmap? {
+    /** 采样解码 + 按 EXIF 方向摆正；maxSide 为最大边上限 */
+    private fun loadBitmap(uri: Uri, maxSide: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, bounds)
         }
         var sample = 1
-        val maxSide = maxOf(bounds.outWidth, bounds.outHeight)
-        while (maxSide / sample > MAX_SIZE) sample *= 2
+        val maxSrc = maxOf(bounds.outWidth, bounds.outHeight)
+        while (maxSrc / sample > maxSide) sample *= 2
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        return contentResolver.openInputStream(uri)?.use {
+        val decoded = contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, opts)
+        } ?: return null
+        return applyExifOrientation(uri, decoded)
+    }
+
+    private fun applyExifOrientation(uri: Uri, bmp: Bitmap): Bitmap {
+        val orientation = try {
+            contentResolver.openInputStream(uri)?.use { stream ->
+                ExifInterface(stream).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (e: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
         }
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            else -> return bmp
+        }
+        val out = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+        if (out !== bmp) bmp.recycle()
+        return out
     }
 
     // ---------- 工具页签 ----------
@@ -196,8 +267,9 @@ class EditActivity : AppCompatActivity() {
 
     private fun markCropSelected(selected: Button) {
         val buttons = listOf(
-            binding.btnCropOriginal, binding.btnCrop11,
-            binding.btnCrop43, binding.btnCrop169, binding.btnCropScreen
+            binding.btnCropOriginal, binding.btnCrop11, binding.btnCrop43,
+            binding.btnCrop32, binding.btnCrop169, binding.btnCrop45,
+            binding.btnCrop916, binding.btnCropScreen
         )
         highlightSelected(buttons, selected)
     }
@@ -239,66 +311,172 @@ class EditActivity : AppCompatActivity() {
     /** 从原图按当前结构状态重建工作位图 */
     private fun rebuildWorking() {
         val src = originalBitmap ?: return
-        var bmp = src
+        val built = applyStructure(src)
+        workingBitmap?.let { if (it !== originalBitmap && it !== built) it.recycle() }
+        workingBitmap = built
+        tonalBitmap?.recycle()
+        tonalBitmap = null
+        refreshTonalPreview()
+    }
 
-        // 中心裁剪
+    /**
+     * 对任意位图应用当前结构编辑（中心裁剪 → 旋转/拉正/镜像）。
+     * 不回收输入位图；无实际变换时返回输入本身。
+     */
+    private fun applyStructure(src: Bitmap): Bitmap {
+        var bmp = src
+        var owned = false
+
         if (cropRatioW > 0 && cropRatioH > 0) {
             val target = cropRatioW / cropRatioH
             val srcRatio = bmp.width.toFloat() / bmp.height
-            bmp = if (srcRatio > target) {
-                val w = (bmp.height * target).toInt()
-                Bitmap.createBitmap(bmp, (bmp.width - w) / 2, 0, w, bmp.height)
+            val w: Int
+            val h: Int
+            if (srcRatio > target) {
+                w = (bmp.height * target).toInt(); h = bmp.height
             } else {
-                val h = (bmp.width / target).toInt()
-                Bitmap.createBitmap(bmp, 0, (bmp.height - h) / 2, bmp.width, h)
+                w = bmp.width; h = (bmp.width / target).toInt()
+            }
+            if (w in 1 until bmp.width || h in 1 until bmp.height) {
+                val cropped = Bitmap.createBitmap(
+                    bmp, (bmp.width - w) / 2, (bmp.height - h) / 2, w, h
+                )
+                if (owned) bmp.recycle()
+                bmp = cropped
+                owned = true
             }
         }
 
-        // 旋转 + 镜像（中间位图不是原图时回收）
-        if (rotation != 0 || flipped) {
-            val matrix = Matrix()
-            if (rotation != 0) matrix.postRotate(rotation.toFloat())
-            if (flipped) matrix.postScale(-1f, 1f)
-            val transformed = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-            if (bmp !== src) bmp.recycle()
-            bmp = transformed
-        }
+        // 90° 旋转后的内容尺寸（拉正的内接裁剪按此比例计算）
+        val contentW = if (rotation % 180 == 0) bmp.width else bmp.height
+        val contentH = if (rotation % 180 == 0) bmp.height else bmp.width
 
-        workingBitmap?.let { if (it !== originalBitmap) it.recycle() }
-        workingBitmap = bmp
-        updatePreview()
+        val totalRotation = rotation + straightenDeg
+        if (totalRotation != 0f || flipH || flipV) {
+            val matrix = Matrix()
+            if (totalRotation != 0f) matrix.postRotate(totalRotation)
+            if (flipH || flipV) {
+                matrix.postScale(if (flipH) -1f else 1f, if (flipV) -1f else 1f)
+            }
+            val transformed = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+            if (owned) bmp.recycle()
+            bmp = transformed
+            owned = true
+
+            if (straightenDeg != 0f) {
+                // 旋转后中心裁剪到与内容同比例的最大内接矩形，避免黑角
+                val a = contentW.toFloat() / contentH
+                val theta = Math.toRadians(abs(straightenDeg).toDouble())
+                val cosT = cos(theta).toFloat()
+                val sinT = sin(theta).toFloat()
+                val halfW = contentW / 2f
+                val halfH = contentH / 2f
+                val x = min(halfW / (cosT + sinT / a), halfH / (sinT + cosT / a))
+                var cw = (2 * x).toInt()
+                var ch = (2 * x / a).toInt()
+                cw = min(cw, bmp.width)
+                ch = min(ch, bmp.height)
+                if (cw > 0 && ch > 0 && (cw < bmp.width || ch < bmp.height)) {
+                    val cropped = Bitmap.createBitmap(
+                        bmp, (bmp.width - cw) / 2, (bmp.height - ch) / 2, cw, ch
+                    )
+                    bmp.recycle()
+                    bmp = cropped
+                }
+            }
+        }
+        return bmp
     }
 
-    // ---------- 色彩编辑 ----------
+    // ---------- 色调 LUT（曝光/亮度/对比度/高光/阴影） ----------
+
+    private fun isTonalNeutral(): Boolean =
+        exposure == 0 && brightness == 0 && contrast == 100 && highlights == 0 && shadows == 0
+
+    private fun buildLut(): IntArray {
+        val lut = IntArray(256)
+        val expFactor = 2.0.pow(exposure * 0.015).toFloat()
+        val s = shadows / 100f
+        val h = highlights / 100f
+        val bOff = brightness / 100f * 0.30f
+        val c = contrast / 100f
+        for (i in 0..255) {
+            var x = i / 255f * expFactor
+            val xc = x.coerceIn(0f, 1f)
+            x += s * 0.28f * (1f - xc).pow(3)
+            x += h * 0.28f * xc.pow(3)
+            x += bOff
+            x = (x - 0.5f) * c + 0.5f
+            lut[i] = (x.coerceIn(0f, 1f) * 255f).roundToInt()
+        }
+        return lut
+    }
+
+    private fun applyLut(src: Bitmap): Bitmap {
+        val lut = buildLut()
+        val w = src.width
+        val h = src.height
+        val pixels = IntArray(w * h)
+        src.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (idx in pixels.indices) {
+            val p = pixels[idx]
+            val r = lut[(p shr 16) and 0xFF]
+            val g = lut[(p shr 8) and 0xFF]
+            val b = lut[p and 0xFF]
+            pixels[idx] = (p and -0x1000000) or (r shl 16) or (g shl 8) or b
+        }
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        return out
+    }
+
+    /** 色调参数变化后重算预览（后台执行，丢弃过期结果） */
+    private fun refreshTonalPreview() {
+        val src = workingBitmap ?: return
+        if (isTonalNeutral()) {
+            tonalBitmap?.recycle()
+            tonalBitmap = null
+            updatePreview()
+            return
+        }
+        val gen = ++tonalGen
+        executor.execute {
+            val result = applyLut(src)
+            runOnUiThread {
+                if (gen == tonalGen && workingBitmap === src) {
+                    val old = tonalBitmap
+                    tonalBitmap = result
+                    if (old != null && old !== src) old.recycle()
+                    updatePreview()
+                } else {
+                    result.recycle()
+                }
+            }
+        }
+    }
+
+    // ---------- 色彩矩阵（滤镜/饱和度/色温/色调） ----------
 
     private fun buildColorMatrix(): ColorMatrix {
-        // 调节矩阵：饱和度 → 对比度 → 亮度
         val sat = ColorMatrix().apply { setSaturation(saturation / 100f) }
-        val c = contrast / 100f
-        val t = (1f - c) * 128f
-        val con = ColorMatrix(
+        // 色温/色调：通道缩放（暖=加红减蓝，品红=减绿）
+        val tk = temperature / 100f
+        val nk = tint / 100f
+        val rS = 1f + 0.18f * tk + 0.05f * nk
+        val gS = 1f + 0.04f * tk - 0.16f * nk
+        val bS = 1f - 0.22f * tk + 0.05f * nk
+        val tempTint = ColorMatrix(
             floatArrayOf(
-                c, 0f, 0f, 0f, t,
-                0f, c, 0f, 0f, t,
-                0f, 0f, c, 0f, t,
-                0f, 0f, 0f, 1f, 0f
-            )
-        )
-        val b = brightness * 2.55f
-        val bri = ColorMatrix(
-            floatArrayOf(
-                1f, 0f, 0f, 0f, b,
-                0f, 1f, 0f, 0f, b,
-                0f, 0f, 1f, 0f, b,
+                rS, 0f, 0f, 0f, 0f,
+                0f, gS, 0f, 0f, 0f,
+                0f, 0f, bS, 0f, 0f,
                 0f, 0f, 0f, 1f, 0f
             )
         )
         val adjust = ColorMatrix()
-        adjust.postConcat(bri)
-        adjust.postConcat(con)
+        adjust.postConcat(tempTint)
         adjust.postConcat(sat)
 
-        // 滤镜矩阵（后应用）
         val filter = filterMatrix(filterIndex)
         filter.postConcat(adjust)
         return filter
@@ -348,23 +526,171 @@ class EditActivity : AppCompatActivity() {
     }
 
     private fun updatePreview() {
-        val bmp = workingBitmap ?: return
+        val bmp = tonalBitmap ?: workingBitmap ?: return
         binding.ivPreview.setImageBitmap(bmp)
         binding.ivPreview.colorFilter = ColorMatrixColorFilter(buildColorMatrix())
     }
 
-    // ---------- 保存 ----------
+    /** 按住"对比原图"：按下显示未调色的工作图，松开恢复编辑效果 */
+    private fun setupCompareButton() {
+        binding.btnCompare.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    workingBitmap?.let { binding.ivPreview.setImageBitmap(it) }
+                    binding.ivPreview.colorFilter = null
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    updatePreview()
+                    v.performClick()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
 
-    /** 按当前编辑状态渲染最终位图（含滤镜/调节），调用方负责回收 */
-    private fun renderFinalBitmap(): Bitmap? {
-        val bmp = workingBitmap ?: return null
-        val matrix = buildColorMatrix()
-        val result = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+    // ---------- 自动增强 / 重置 ----------
+
+    /** 基于直方图统计的一键增强：拉开黑白场、按平均亮度修曝光/阴影/高光、补饱和 */
+    private fun autoEnhance() {
+        val src = workingBitmap ?: return
+        executor.execute {
+            val w = src.width
+            val h = src.height
+            val pixels = IntArray(w * h)
+            src.getPixels(pixels, 0, w, 0, 0, w, h)
+            val hist = IntArray(256)
+            var satSum = 0.0
+            var count = 0
+            val step = maxOf(1, minOf(w, h) / 96)
+            var y = 0
+            while (y < h) {
+                var x = 0
+                while (x < w) {
+                    val p = pixels[y * w + x]
+                    val r = (p shr 16) and 0xFF
+                    val g = (p shr 8) and 0xFF
+                    val b = p and 0xFF
+                    val lum = (0.299f * r + 0.587f * g + 0.114f * b).toInt()
+                    hist[lum]++
+                    val mx = maxOf(r, g, b)
+                    val mn = minOf(r, g, b)
+                    satSum += if (mx == 0) 0.0 else (mx - mn).toDouble() / mx
+                    count++
+                    x += step
+                }
+                y += step
+            }
+            if (count == 0) return@execute
+            fun percentile(pct: Double): Int {
+                val target = count * pct
+                var acc = 0
+                for (i in 0..255) {
+                    acc += hist[i]
+                    if (acc >= target) return i
+                }
+                return 255
+            }
+            var lumSum = 0L
+            for (i in 0..255) lumSum += i.toLong() * hist[i]
+            val mean = lumSum.toDouble() / count / 255.0
+            val black = percentile(0.02) / 255f
+            val white = percentile(0.98) / 255f
+            val p10 = percentile(0.10) / 255f
+            val p90 = percentile(0.90) / 255f
+            val meanSat = satSum / count
+
+            val range = (white - black).coerceAtLeast(0.05f)
+            val newContrast = (100f / range * 100f).toInt().coerceIn(100, 145)
+            val newBrightness = ((0.5f - (black + white) / 2f) * 60f).toInt().coerceIn(-25, 25)
+            val newExposure = when {
+                mean < 0.32 -> 20
+                mean > 0.70 -> -15
+                else -> ((0.45 - mean) * 40).toInt().coerceIn(-20, 20)
+            }
+            val newShadows = when {
+                p10 < 0.06f -> 25
+                p10 < 0.10f -> 12
+                else -> 0
+            }
+            val newHighlights = when {
+                p90 > 0.97f -> -25
+                p90 > 0.93f -> -12
+                else -> 0
+            }
+            val newSaturation = when {
+                meanSat < 0.18 -> 120
+                meanSat < 0.28 -> 110
+                else -> 100
+            }
+            runOnUiThread {
+                exposure = newExposure
+                brightness = newBrightness
+                contrast = newContrast
+                highlights = newHighlights
+                shadows = newShadows
+                saturation = newSaturation
+                syncAdjustSeeks()
+                refreshTonalPreview()
+                updatePreview()
+                Toast.makeText(this, R.string.edit_auto_done, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun resetAll() {
+        cropRatioW = 0f
+        cropRatioH = 0f
+        rotation = 0
+        straightenDeg = 0f
+        flipH = false
+        flipV = false
+        filterIndex = 0
+        exposure = 0
+        brightness = 0
+        contrast = 100
+        highlights = 0
+        shadows = 0
+        temperature = 0
+        tint = 0
+        saturation = 100
+        binding.seekStraighten.progress = 90
+        syncAdjustSeeks()
+        markCropSelected(binding.btnCropOriginal)
+        val filterButtons = listOf(
+            binding.btnFilterNone, binding.btnFilterBw, binding.btnFilterSepia,
+            binding.btnFilterCool, binding.btnFilterWarm, binding.btnFilterVivid
+        )
+        highlightSelected(filterButtons, binding.btnFilterNone)
+        rebuildWorking()
+        Toast.makeText(this, R.string.edit_reset_done, Toast.LENGTH_SHORT).show()
+    }
+
+    /** 把当前调节状态同步到滑杆位置（编程式赋值不触发回调） */
+    private fun syncAdjustSeeks() {
+        binding.seekExposure.progress = exposure + 100
+        binding.seekBrightness.progress = brightness + 100
+        binding.seekContrast.progress = contrast
+        binding.seekHighlights.progress = highlights + 100
+        binding.seekShadows.progress = shadows + 100
+        binding.seekTemperature.progress = temperature + 100
+        binding.seekTint.progress = tint + 100
+        binding.seekSaturation.progress = saturation
+    }
+
+    // ---------- 保存 / 壁纸 ----------
+
+    /** 对已完成结构编辑的位图应用 LUT + 色彩矩阵，返回新位图（调用方负责回收） */
+    private fun renderColorBitmap(structured: Bitmap): Bitmap {
+        val base = if (isTonalNeutral()) structured else applyLut(structured)
+        val result = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val paint = Paint().apply {
-            colorFilter = ColorMatrixColorFilter(matrix)
+            colorFilter = ColorMatrixColorFilter(buildColorMatrix())
         }
-        canvas.drawBitmap(bmp, 0f, 0f, paint)
+        canvas.drawBitmap(base, 0f, 0f, paint)
+        if (base !== structured) base.recycle()
         return result
     }
 
@@ -373,7 +699,14 @@ class EditActivity : AppCompatActivity() {
         binding.btnSave.isEnabled = false
         executor.execute {
             try {
-                val result = renderFinalBitmap() ?: throw IllegalStateException("渲染失败")
+                // 保存走全分辨率管线：重新按上限 4096 解码原图，套用同一套编辑状态
+                val uri = sourceUri ?: throw IllegalStateException("无源图")
+                val full = loadBitmap(uri, SAVE_MAX_SIZE)
+                val base = full ?: workingBitmap ?: throw IllegalStateException("渲染失败")
+                val structured = applyStructure(base)
+                val result = renderColorBitmap(structured)
+                if (structured !== base) structured.recycle()
+                if (full != null) full.recycle()
 
                 val name = "AngelaCam_${
                     SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
@@ -385,16 +718,16 @@ class EditActivity : AppCompatActivity() {
                         put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/AngelaCam")
                     }
                 }
-                val uri = contentResolver.insert(
+                val outUri = contentResolver.insert(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
                 ) ?: throw IllegalStateException("MediaStore insert 失败")
-                contentResolver.openOutputStream(uri)?.use { os ->
+                contentResolver.openOutputStream(outUri)?.use { os ->
                     if (!result.compress(Bitmap.CompressFormat.JPEG, 92, os)) {
                         throw IllegalStateException("JPEG 压缩失败")
                     }
                 } ?: throw IllegalStateException("无法打开输出流")
                 result.recycle()
-                CaptureStore.add(this, uri, "image/jpeg", name)
+                CaptureStore.add(this, outUri, "image/jpeg", name)
                 runOnUiThread {
                     Toast.makeText(this, getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
                     finish()
@@ -409,15 +742,13 @@ class EditActivity : AppCompatActivity() {
         }
     }
 
-    // ---------- 壁纸模式 ----------
-
-    /** 壁纸模式：渲染当前编辑效果，直接设为壁纸（不另存文件） */
     private fun applyAsWallpaper() {
         if (workingBitmap == null) return
         binding.btnSave.isEnabled = false
         executor.execute {
             try {
-                val result = renderFinalBitmap() ?: throw IllegalStateException("渲染失败")
+                val base = workingBitmap ?: throw IllegalStateException("渲染失败")
+                val result = renderColorBitmap(base)
                 runOnUiThread {
                     binding.btnSave.isEnabled = true
                     chooseWallpaperTarget(result)
