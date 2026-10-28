@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 及以下的自动备份规则：拍摄记录索引（含媒体 URI 与文件名）
+     不随系统云备份离开设备 -->
+<full-backup-content>
+    <exclude domain="file" path="captures.json" />
+</full-backup-content>
