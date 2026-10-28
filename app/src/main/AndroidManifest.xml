@@ -6,7 +6,8 @@
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <!-- v1.3.0：仅用于检查更新（只连接 GitHub，用户可关闭），不做其他任何网络请求 -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 不再持有 REQUEST_INSTALL_PACKAGES：应用内装包是 Play Protect 的主要判定
+         触发面；发现新版只跳转浏览器打开 Release 页下载（2026-10-28 审计处置） -->
     <!-- Only needed on Android 9 and below for MediaStore writes -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -17,6 +18,8 @@
 
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -82,16 +85,7 @@
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- 更新包安装：仅一次性授权给系统安装器 -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/filepaths" />
-        </provider>
+        <!-- FileProvider 已随应用内装包一并移除：不再有把 APK 授权给安装器的场景 -->
     </application>
 
 </manifest>
