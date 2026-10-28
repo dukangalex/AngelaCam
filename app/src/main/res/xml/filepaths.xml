@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 仅用于把下载的更新包一次性授权给系统安装器 -->
-<paths>
-    <external-cache-path name="external_updates" path="updates/" />
-    <cache-path name="updates" path="updates/" />
-</paths>
