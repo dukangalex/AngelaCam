@@ -121,4 +121,30 @@
     <string name="about_license_body">本应用以 GPL-3.0 许可证开源。</string>
     <string name="about_copyright">Copyright (C) 2026 dukangalex</string>
     <string name="settings_about">关于 AngelaCam</string>
+    <!-- 2026-10-28 审计修复新增：原先硬编码在代码里的用户提示统一回收到资源 -->
+    <string name="perm_camera_title">相机权限未开启</string>
+    <string name="perm_camera_message">需要相机权限才能拍照和录像。你可以在系统设置中为 AngelaCam 开启相机权限。</string>
+    <string name="perm_go_settings">去设置</string>
+    <string name="perm_exit">退出</string>
+    <string name="toast_mic_denied">已拒绝麦克风权限，将静音录制</string>
+    <string name="toast_camera_start_failed">相机启动失败</string>
+    <string name="toast_photo_saved">已保存到相册</string>
+    <string name="toast_photo_failed">拍照失败，请重试</string>
+    <string name="toast_record_start">开始录像</string>
+    <string name="toast_video_saved">视频已保存到相册</string>
+    <string name="toast_record_failed">录像失败，请重试</string>
+    <string name="toast_recording_mode">录像中，无法切换模式</string>
+    <string name="toast_recording_switch">录像中，无法切换摄像头</string>
+    <string name="toast_slideshow_on">幻灯片播放中，再次点击停止</string>
+    <string name="toast_deleted">已删除</string>
+    <string name="toast_delete_failed">删除失败</string>
+    <string name="toast_video_edit_unsupported">视频暂不支持编辑</string>
+    <string name="toast_no_share_app">没有可用的分享应用</string>
+    <string name="toast_image_load_failed">图片加载失败</string>
+    <string name="toast_save_failed">保存失败，请重试</string>
+    <string name="edit_discard_title">放弃编辑？</string>
+    <string name="edit_discard_message">当前编辑尚未保存，退出将丢失这些修改。</string>
+    <string name="edit_discard_ok">放弃</string>
+    <string name="edit_discard_cancel">继续编辑</string>
+    <string name="update_open_failed">打开下载页面失败，请稍后重试</string>
 </resources>
