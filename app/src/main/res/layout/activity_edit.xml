@@ -36,6 +36,15 @@
             android:textSize="17sp" />
 
         <Button
+            android:id="@+id/btnCompare"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:text="@string/edit_compare"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+
+        <Button
             android:id="@+id/btnSave"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
@@ -115,97 +124,173 @@
         android:layout_height="150dp"
         android:background="#80000000">
 
-        <!-- 裁剪选项 -->
-        <LinearLayout
+        <!-- 裁剪选项（横向滚动） -->
+        <HorizontalScrollView
             android:id="@+id/cropOptions"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:scrollbars="none">
 
-            <Button
-                android:id="@+id/btnCropOriginal"
+            <LinearLayout
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="72dp"
-                android:background="@android:color/transparent"
-                android:text="@string/crop_original"
-                android:textColor="#FFFFFF" />
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
 
-            <Button
-                android:id="@+id/btnCrop11"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="72dp"
-                android:background="@android:color/transparent"
-                android:text="@string/aspect_1_1"
-                android:textColor="#FFFFFF" />
+                <Button
+                    android:id="@+id/btnCropOriginal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/crop_original"
+                    android:textColor="#FFFFFF" />
 
-            <Button
-                android:id="@+id/btnCrop43"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="72dp"
-                android:background="@android:color/transparent"
-                android:text="@string/aspect_4_3"
-                android:textColor="#FFFFFF" />
+                <Button
+                    android:id="@+id/btnCrop11"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_1_1"
+                    android:textColor="#FFFFFF" />
 
-            <Button
-                android:id="@+id/btnCrop169"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="72dp"
-                android:background="@android:color/transparent"
-                android:text="@string/aspect_16_9"
-                android:textColor="#FFFFFF" />
+                <Button
+                    android:id="@+id/btnCrop43"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_4_3"
+                    android:textColor="#FFFFFF" />
 
-            <Button
-                android:id="@+id/btnCropScreen"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="72dp"
-                android:background="@android:color/transparent"
-                android:text="@string/crop_screen"
-                android:textColor="#FFFFFF"
-                android:visibility="gone" />
-        </LinearLayout>
+                <Button
+                    android:id="@+id/btnCrop32"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_3_2"
+                    android:textColor="#FFFFFF" />
 
-        <!-- 旋转选项 -->
+                <Button
+                    android:id="@+id/btnCrop169"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_16_9"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnCrop45"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_4_5"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnCrop916"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/aspect_9_16"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnCropScreen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="72dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/crop_screen"
+                    android:textColor="#FFFFFF"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- 旋转选项：按钮行 + 拉正滑杆 -->
         <LinearLayout
             android:id="@+id/rotateOptions"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:gravity="center"
             android:visibility="gone">
 
-            <Button
-                android:id="@+id/btnRotateLeft"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minWidth="88dp"
-                android:background="@android:color/transparent"
-                android:text="@string/rotate_left"
-                android:textColor="#FFFFFF" />
+                android:orientation="horizontal"
+                android:gravity="center">
 
-            <Button
-                android:id="@+id/btnRotateRight"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="88dp"
-                android:background="@android:color/transparent"
-                android:text="@string/rotate_right"
-                android:textColor="#FFFFFF" />
+                <Button
+                    android:id="@+id/btnRotateLeft"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="80dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/rotate_left"
+                    android:textColor="#FFFFFF" />
 
-            <Button
-                android:id="@+id/btnFlip"
-                android:layout_width="wrap_content"
+                <Button
+                    android:id="@+id/btnRotateRight"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="80dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/rotate_right"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFlip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="80dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/flip_horizontal"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnFlipVertical"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="80dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/flip_vertical"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minWidth="88dp"
-                android:background="@android:color/transparent"
-                android:text="@string/flip_horizontal"
-                android:textColor="#FFFFFF" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="8dp">
+
+                <TextView
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/straighten"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/seekStraighten"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="180"
+                    android:progress="90" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- 滤镜选项 -->
@@ -280,82 +365,229 @@
             </LinearLayout>
         </HorizontalScrollView>
 
-        <!-- 调节选项 -->
+        <!-- 调节选项：自动增强/重置 + 可滚动滑杆列表 -->
         <LinearLayout
             android:id="@+id/adjustOptions"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:gravity="center_vertical"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
             android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center">
 
-                <TextView
-                    android:layout_width="56dp"
+                <Button
+                    android:id="@+id/btnAutoEnhance"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/adjust_brightness"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
+                    android:minWidth="96dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/edit_auto_enhance"
+                    android:textColor="#4CAF50" />
 
-                <SeekBar
-                    android:id="@+id/seekBrightness"
-                    android:layout_width="0dp"
+                <Button
+                    android:id="@+id/btnReset"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:max="200"
-                    android:progress="100" />
+                    android:minWidth="96dp"
+                    android:background="@android:color/transparent"
+                    android:text="@string/edit_reset"
+                    android:textColor="#FFFFFF" />
             </LinearLayout>
 
-            <LinearLayout
+            <ScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_height="0dp"
+                android:layout_weight="1">
 
-                <TextView
-                    android:layout_width="56dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/adjust_contrast"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
+                    android:orientation="vertical"
+                    android:paddingStart="24dp"
+                    android:paddingEnd="24dp"
+                    android:paddingBottom="8dp">
 
-                <SeekBar
-                    android:id="@+id/seekContrast"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:max="200"
-                    android:progress="100" />
-            </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_exposure"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
 
-                <TextView
-                    android:layout_width="56dp"
-                    android:layout_height="wrap_content"
-                    android:text="@string/adjust_saturation"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
+                        <SeekBar
+                            android:id="@+id/seekExposure"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
 
-                <SeekBar
-                    android:id="@+id/seekSaturation"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:max="200"
-                    android:progress="100" />
-            </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_brightness"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekBrightness"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_contrast"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekContrast"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_highlights"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekHighlights"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_shadows"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekShadows"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_temperature"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekTemperature"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_tint"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekTint"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="56dp"
+                            android:layout_height="wrap_content"
+                            android:text="@string/adjust_saturation"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp" />
+
+                        <SeekBar
+                            android:id="@+id/seekSaturation"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:max="200"
+                            android:progress="100" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
         </LinearLayout>
     </FrameLayout>
 
