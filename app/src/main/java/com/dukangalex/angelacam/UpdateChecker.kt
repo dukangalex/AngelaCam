@@ -78,7 +78,11 @@ object UpdateChecker {
                     }
                 }
                 if (downloadUrl.isEmpty()) return Result.Failed("未找到安装包")
-                require(URL(downloadUrl).host in ALLOWED_HOSTS) { "下载主机不在白名单" }
+                // 白名单同时验域名与协议：只认 https，防明文降级
+                val dl = URL(downloadUrl)
+                require(dl.protocol == "https" && dl.host in ALLOWED_HOSTS) { "下载地址不在白名单" }
+                val page = URL(json.optString("html_url", ""))
+                require(page.protocol == "https" && page.host in ALLOWED_HOSTS) { "页面地址不在白名单" }
                 return if (isNewer(version, currentVersion(context))) {
                     Result.Available(
                         UpdateInfo(

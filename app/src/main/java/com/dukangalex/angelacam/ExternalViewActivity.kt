@@ -72,7 +72,7 @@ class ExternalViewActivity : AppCompatActivity() {
                     val bmp = loadSampledBitmap(uri)
                     runOnUiThread {
                         if (bmp == null) {
-                            Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, R.string.toast_image_load_failed, Toast.LENGTH_SHORT).show()
                             finish()
                         } else {
                             binding.imageView.setImageBitmap(bmp)
@@ -81,7 +81,7 @@ class ExternalViewActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e(TAG, "加载图片失败", e)
                     runOnUiThread {
-                        Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, R.string.toast_image_load_failed, Toast.LENGTH_SHORT).show()
                         finish()
                     }
                 }
@@ -94,10 +94,14 @@ class ExternalViewActivity : AppCompatActivity() {
         executor.shutdown()
     }
 
-    /** VIEW 取 intent.data；SEND/SEND_MULTIPLE 取 EXTRA_STREAM（多选只取第一张） */
+    /**
+     * VIEW 取 intent.data；SEND/SEND_MULTIPLE 取 EXTRA_STREAM（多选只取第一张）。
+     * 只接受 content/file 两类本地地址：本入口是 exported 的，任意应用都能发 intent
+     * 过来，若照单全收 http(s) 地址，VideoView 会以本应用身份联网取流——等于被无
+     * 网络权限的应用借道联网，也违反本应用「只连接 GitHub」的承诺。
+     */
     private fun resolveUri(): Uri? {
-        intent.data?.let { return it }
-        return when (intent.action) {
+        val raw: Uri? = intent.data ?: when (intent.action) {
             Intent.ACTION_SEND -> {
                 if (Build.VERSION.SDK_INT >= 33) {
                     intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
@@ -116,6 +120,13 @@ class ExternalViewActivity : AppCompatActivity() {
                 list?.firstOrNull()
             }
             else -> null
+        }
+        if (raw == null) return null
+        return if (raw.scheme == "content" || raw.scheme == "file") {
+            raw
+        } else {
+            Log.w(TAG, "拒绝非本地地址 scheme=${raw.scheme}")
+            null
         }
     }
 
@@ -223,7 +234,7 @@ class ExternalViewActivity : AppCompatActivity() {
         try {
             startActivity(Intent.createChooser(intent, null))
         } catch (e: Exception) {
-            Toast.makeText(this, "没有可用的分享应用", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_no_share_app, Toast.LENGTH_SHORT).show()
         }
     }
 }

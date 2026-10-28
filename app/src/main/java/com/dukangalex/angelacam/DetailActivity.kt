@@ -38,6 +38,7 @@ class DetailActivity : AppCompatActivity() {
         private const val TAG = "Detail"
         private const val SLIDESHOW_INTERVAL = 3000L
         private const val WALLPAPER_MAX_SIZE = 2048
+        private const val DETAIL_MAX_SIZE = 2048
     }
 
     private lateinit var binding: ActivityDetailBinding
@@ -69,14 +70,6 @@ class DetailActivity : AppCompatActivity() {
         binding = ActivityDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        items = CaptureStore.list(this).toMutableList()
-        if (items.isEmpty()) {
-            finish()
-            return
-        }
-        val startPos = intent.getIntExtra(EXTRA_POSITION, 0).coerceIn(items.indices)
-
-        binding.viewPager.adapter = PagerAdapter()
         binding.viewPager.registerOnPageChangeCallback(pageCallback)
 
         binding.btnBack.setOnClickListener { finish() }
@@ -87,9 +80,23 @@ class DetailActivity : AppCompatActivity() {
         binding.btnInfo.setOnClickListener { showInfo() }
         binding.btnShare.setOnClickListener { share() }
 
-        binding.viewPager.setCurrentItem(startPos, false)
-        updatePageUi(startPos)
-        startVideoIfNeeded(startPos)
+        // 列表加载含逐条存活探测（IO），放后台线程，不再卡 onCreate 主线程
+        ioExecutor.execute {
+            val loaded = CaptureStore.list(this)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (loaded.isEmpty()) {
+                    finish()
+                    return@runOnUiThread
+                }
+                items = loaded.toMutableList()
+                val startPos = intent.getIntExtra(EXTRA_POSITION, 0).coerceIn(items.indices)
+                binding.viewPager.adapter = PagerAdapter()
+                binding.viewPager.setCurrentItem(startPos, false)
+                updatePageUi(startPos)
+                startVideoIfNeeded(startPos)
+            }
+        }
     }
 
     override fun onResume() {
@@ -162,7 +169,20 @@ class DetailActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val uri = Uri.parse(items[position].uri)
             when (holder) {
-                is PhotoVH -> holder.imageView.setImageURI(uri)
+                is PhotoVH -> {
+                    // 后台采样解码（上限 2048）：原 setImageURI 在主线程全分辨率
+                    // 同步解码，12MP 单张约 48MB，滑动必卡且有 OOM 风险
+                    holder.imageView.tag = items[position].uri
+                    holder.imageView.setImageDrawable(null)
+                    ioExecutor.execute {
+                        val bmp = loadSampledBitmap(uri, DETAIL_MAX_SIZE)
+                        runOnUiThread {
+                            if (holder.imageView.tag == items.getOrNull(position)?.uri) {
+                                holder.imageView.setImageBitmap(bmp)
+                            }
+                        }
+                    }
+                }
                 is VideoVH -> {
                     holder.videoView.setVideoURI(uri)
                     holder.videoView.setOnPreparedListener { mp ->
@@ -178,6 +198,10 @@ class DetailActivity : AppCompatActivity() {
         override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
             if (holder is VideoVH) {
                 holder.videoView.stopPlayback()
+            }
+            if (holder is PhotoVH) {
+                holder.imageView.tag = null
+                holder.imageView.setImageDrawable(null)
             }
             super.onViewRecycled(holder)
         }
@@ -218,7 +242,7 @@ class DetailActivity : AppCompatActivity() {
         binding.btnSlideshow.alpha = if (slideshowOn) 1f else 0.45f
         if (slideshowOn) {
             uiHandler.postDelayed(slideshowRunnable, SLIDESHOW_INTERVAL)
-            Toast.makeText(this, "幻灯片播放中，再次点击停止", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_slideshow_on, Toast.LENGTH_SHORT).show()
         } else {
             uiHandler.removeCallbacks(slideshowRunnable)
         }
@@ -241,9 +265,9 @@ class DetailActivity : AppCompatActivity() {
         try {
             contentResolver.delete(uri, null, null)
             CaptureStore.remove(this, uri.toString())
-            Toast.makeText(this, "已删除", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_deleted, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_delete_failed, Toast.LENGTH_SHORT).show()
             return
         }
         stopPlayingVideo(except = -1)
@@ -269,7 +293,7 @@ class DetailActivity : AppCompatActivity() {
     private fun openEditor() {
         val item = currentItem() ?: return
         if (item.isVideo) {
-            Toast.makeText(this, "视频暂不支持编辑", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_video_edit_unsupported, Toast.LENGTH_SHORT).show()
             return
         }
         val intent = Intent(this, EditActivity::class.java).apply {
@@ -431,7 +455,7 @@ class DetailActivity : AppCompatActivity() {
         try {
             startActivity(Intent.createChooser(intent, null))
         } catch (e: Exception) {
-            Toast.makeText(this, "没有可用的分享应用", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_no_share_app, Toast.LENGTH_SHORT).show()
         }
     }
 }
