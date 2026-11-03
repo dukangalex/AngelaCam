@@ -151,6 +151,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.bottomBar)
         cameraExecutor = Executors.newSingleThreadExecutor()
         backgroundExecutor = Executors.newSingleThreadExecutor()
 

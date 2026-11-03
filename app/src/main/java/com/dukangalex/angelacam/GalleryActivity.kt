@@ -32,6 +32,7 @@ class GalleryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityGalleryBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.root)
 
         binding.btnBack.setOnClickListener { finish() }
         binding.recyclerView.layoutManager = GridLayoutManager(this, 3)

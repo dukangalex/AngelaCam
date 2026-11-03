@@ -39,6 +39,7 @@ class ExternalViewActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityExternalViewBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.root)
 
         mediaUri = resolveUri()
         if (mediaUri == null) {

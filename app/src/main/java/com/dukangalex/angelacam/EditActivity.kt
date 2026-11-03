@@ -111,6 +111,7 @@ class EditActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityEditBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.root)
 
         val uriStr = intent.getStringExtra(EXTRA_URI)
         if (uriStr.isNullOrEmpty()) {

@@ -23,6 +23,7 @@ class AboutActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityAboutBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.root)
 
         binding.btnBack.setOnClickListener { finish() }
 

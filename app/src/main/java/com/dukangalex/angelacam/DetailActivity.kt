@@ -69,6 +69,7 @@ class DetailActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        NavigationBarInsets.applyTo(binding.root)
 
         binding.viewPager.registerOnPageChangeCallback(pageCallback)
 
