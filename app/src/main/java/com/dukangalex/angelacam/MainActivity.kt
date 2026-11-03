@@ -409,6 +409,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTimerUi() {
+        binding.btnTimer.isSelected = timerSeconds > 0
         binding.btnTimer.text = when (timerSeconds) {
             3 -> getString(R.string.timer_3s)
             10 -> getString(R.string.timer_10s)
@@ -584,6 +585,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateGridUi() {
         binding.gridOverlay.mode = gridMode
+        binding.btnGrid.isSelected = gridMode != GridOverlayView.MODE_OFF
         binding.btnGrid.setImageResource(
             if (gridMode == GridOverlayView.MODE_OFF) R.drawable.ic_grid_off
             else R.drawable.ic_grid
@@ -604,6 +606,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateAspectUi() {
+        binding.btnAspect.isSelected = aspectRatio != ASPECT_4_3
         binding.btnAspect.text = when (aspectRatio) {
             ASPECT_16_9 -> getString(R.string.aspect_16_9)
             ASPECT_1_1 -> getString(R.string.aspect_1_1)

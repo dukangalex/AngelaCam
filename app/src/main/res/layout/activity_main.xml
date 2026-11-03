@@ -26,78 +26,88 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 顶部栏 -->
+    <!-- 顶部轻量玻璃控制栏：保留宽阔取景区域 -->
     <LinearLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="58dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="42dp"
+        android:layout_marginEnd="16dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="48dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:background="@drawable/bg_camera_top_rail"
+        android:elevation="6dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-
         <ImageButton
             android:id="@+id/btnFlash"
-            android:layout_width="48dp"
+            android:layout_width="0dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_weight="1"
+            android:background="@drawable/bg_camera_control"
             android:contentDescription="@string/desc_flash"
+            android:scaleType="center"
             android:src="@drawable/ic_flash_auto" />
-
         <Button
             android:id="@+id/btnTimer"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:minWidth="56dp"
-            android:background="@android:color/transparent"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:background="@drawable/bg_camera_control"
             android:text="@string/timer_off"
             android:textColor="#FFFFFF"
-            android:textSize="15sp" />
-
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium" />
         <Button
             android:id="@+id/btnAspect"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:minWidth="56dp"
-            android:background="@android:color/transparent"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:background="@drawable/bg_camera_control"
             android:text="@string/aspect_4_3"
             android:textColor="#FFFFFF"
-            android:textSize="15sp"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
             android:contentDescription="@string/desc_aspect" />
-
         <ImageButton
             android:id="@+id/btnGrid"
-            android:layout_width="48dp"
+            android:layout_width="0dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_weight="1"
+            android:background="@drawable/bg_camera_control"
             android:contentDescription="@string/desc_grid"
+            android:scaleType="center"
             android:src="@drawable/ic_grid_off" />
-
         <ImageButton
             android:id="@+id/btnSettings"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/desc_settings"
-            android:src="@drawable/ic_settings" />
-
-        <Space
             android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_camera_control"
+            android:contentDescription="@string/desc_settings"
+            android:scaleType="center"
+            android:src="@drawable/ic_settings" />
         <ImageButton
             android:id="@+id/btnSwitchCamera"
-            android:layout_width="48dp"
+            android:layout_width="0dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_weight="1"
+            android:background="@drawable/bg_camera_control"
             android:contentDescription="@string/desc_switch_camera"
+            android:scaleType="center"
             android:src="@drawable/ic_switch_camera" />
     </LinearLayout>
-
     <!-- 录像指示器 -->
     <LinearLayout
         android:id="@+id/recordingIndicator"
@@ -154,12 +164,16 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:layout_marginStart="22dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginBottom="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:visibility="gone"
-        android:background="#80000000"
+        android:background="@drawable/bg_camera_exposure"
+        android:elevation="4dp"
         app:layout_constraintBottom_toTopOf="@+id/bottomBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -168,8 +182,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="EV"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:textColor="#E9E7EB"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium" />
 
         <SeekBar
             android:id="@+id/seekExposure"
@@ -188,52 +203,62 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- 底部控制栏 -->
+    <!-- 悬浮式拍摄底座：控件聚拢，取景区保持开阔 -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="10dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="24dp"
-        android:background="#80000000"
+        android:paddingStart="14dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="12dp"
+        android:background="@drawable/bg_camera_dock"
+        android:elevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-
         <ImageButton
             android:id="@+id/btnThumbnail"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
             android:background="@drawable/thumbnail_bg"
+            android:clipToOutline="true"
             android:contentDescription="@string/desc_thumbnail"
             android:scaleType="centerCrop" />
-
         <Space
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
-
         <ImageButton
             android:id="@+id/btnShutter"
-            android:layout_width="76dp"
-            android:layout_height="76dp"
+            android:layout_width="82dp"
+            android:layout_height="82dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/desc_shutter"
+            android:scaleType="center"
             android:src="@drawable/ic_shutter" />
-
         <Space
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
-
         <Button
             android:id="@+id/btnMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#80000000"
+            android:layout_width="76dp"
+            android:layout_height="44dp"
+            android:minWidth="76dp"
+            android:minHeight="44dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:background="@drawable/bg_camera_mode_chip"
+            android:backgroundTint="@null"
             android:text="@string/mode_video"
-            android:textColor="#FFFFFF" />
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium" />
     </LinearLayout>
-
 </androidx.constraintlayout.widget.ConstraintLayout>
