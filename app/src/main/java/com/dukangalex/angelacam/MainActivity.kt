@@ -257,7 +257,7 @@ class MainActivity : AppCompatActivity() {
             it.setSurfaceProvider(binding.previewView.surfaceProvider)
         }
         imageCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setFlashMode(flashMode)
             .setTargetAspectRatio(
                 if (aspectRatio == ASPECT_16_9) AspectRatio.RATIO_16_9

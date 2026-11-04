@@ -60,6 +60,9 @@
     <string name="edit_reset">重置</string>
     <string name="edit_auto_done">已自动增强，可继续微调</string>
     <string name="edit_reset_done">已重置全部编辑</string>
+    <string name="adjust_gesture_format">%1$s  %2$s · 左右滑动照片调节</string>
+    <string name="straighten_tap_reset">点按“拉正”可恢复到 0°</string>
+    <string name="straighten_value">拉正 %1$s°</string>
     <string name="adjust_exposure">曝光</string>
     <string name="adjust_highlights">高光</string>
     <string name="adjust_shadows">阴影</string>

@@ -72,6 +72,7 @@ class EditActivity : AppCompatActivity() {
         private const val STATE_TEMPERATURE = "temperature"
         private const val STATE_TINT = "tint"
         private const val STATE_SATURATION = "saturation"
+        private const val STATE_ADJUSTMENT = "adjustment"
     }
 
     private lateinit var binding: ActivityEditBinding
@@ -106,6 +107,14 @@ class EditActivity : AppCompatActivity() {
     private var temperature = 0 // -100..100，负=冷 正=暖
     private var tint = 0 // -100..100，负=绿 正=品红
     private var saturation = 100 // 0..200，100=1.0
+    private var selectedAdjustmentIndex = 0
+    private var currentTool = TOOL_CROP
+    private var adjustmentStartX = 0f
+    private var adjustmentStartValue = 0
+    @Volatile private var structureGeneration = 0
+    private var pendingStructurePreview: Runnable? = null
+    private var filterPreviewSource: Bitmap? = null
+    private var filterPreviewBitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,6 +147,15 @@ class EditActivity : AppCompatActivity() {
             if (wallpaperMode) applyAsWallpaper() else save()
         }
         setupCompareButton()
+        binding.ivPreview.setOnTouchListener { _, event -> handleAdjustmentTouch(event) }
+        binding.tvStraighten.contentDescription = getString(R.string.straighten_tap_reset)
+        binding.tvStraighten.setOnClickListener {
+            straightenDeg = 0f
+            binding.seekStraighten.progress = 90
+            updateStraightenLabel()
+            rebuildWorking()
+        }
+        updateStraightenLabel()
 
         binding.tabCrop.setOnClickListener { showTool(TOOL_CROP) }
         binding.tabRotate.setOnClickListener { showTool(TOOL_ROTATE) }
@@ -162,7 +180,11 @@ class EditActivity : AppCompatActivity() {
         binding.btnFlipVertical.setOnClickListener { flipV = !flipV; rebuildWorking() }
         binding.seekStraighten.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) straightenDeg = (progress - 90) / 2f
+                if (fromUser) {
+                    straightenDeg = (progress - 90) / 2f
+                    updateStraightenLabel()
+                    rebuildWorking(80L)
+                }
             }
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) { rebuildWorking() }
@@ -175,16 +197,21 @@ class EditActivity : AppCompatActivity() {
         binding.btnFilterWarm.setOnClickListener { setFilter(4, binding.btnFilterWarm) }
         binding.btnFilterVivid.setOnClickListener { setFilter(5, binding.btnFilterVivid) }
 
-        // 色调类（走 LUT）：曝光/亮度/对比度/高光/阴影
-        setupAdjustSeek(binding.seekExposure) { exposure = it - 100; refreshTonalPreview() }
-        setupAdjustSeek(binding.seekBrightness) { brightness = it - 100; refreshTonalPreview() }
-        setupAdjustSeek(binding.seekContrast) { contrast = it; refreshTonalPreview() }
-        setupAdjustSeek(binding.seekHighlights) { highlights = it - 100; refreshTonalPreview() }
-        setupAdjustSeek(binding.seekShadows) { shadows = it - 100; refreshTonalPreview() }
-        // 矩阵类（实时 colorFilter）：色温/色调/饱和度
-        setupAdjustSeek(binding.seekTemperature) { temperature = it - 100; updatePreview() }
-        setupAdjustSeek(binding.seekTint) { tint = it - 100; updatePreview() }
-        setupAdjustSeek(binding.seekSaturation) { saturation = it; updatePreview() }
+        listOf(
+            binding.btnAdjustExposure, binding.btnAdjustBrightness,
+            binding.btnAdjustContrast, binding.btnAdjustHighlights,
+            binding.btnAdjustShadows, binding.btnAdjustTemperature,
+            binding.btnAdjustTint, binding.btnAdjustSaturation
+        ).forEachIndexed { index, button ->
+            button.setOnClickListener { selectAdjustment(index) }
+        }
+        listOf(
+            binding.ivFilterNone, binding.ivFilterBw, binding.ivFilterSepia,
+            binding.ivFilterCool, binding.ivFilterWarm, binding.ivFilterVivid
+        ).forEachIndexed { index, image ->
+            image.setOnClickListener { filterButtons()[index].performClick() }
+        }
+        updateAdjustmentSelection()
 
         binding.btnAutoEnhance.setOnClickListener { autoEnhance() }
         binding.btnReset.setOnClickListener { resetAll() }
@@ -225,6 +252,9 @@ class EditActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        structureGeneration++
+        pendingStructurePreview?.let { binding.ivPreview.removeCallbacks(it) }
+        pendingStructurePreview = null
         executor.shutdown()
         // 不手工 recycle 三张共享位图：后台任务（LUT/自动增强）可能仍在读取，
         // 手工回收与之竞态会 use-after-recycle 崩溃；页面退出后由 GC 回收即可
@@ -249,6 +279,7 @@ class EditActivity : AppCompatActivity() {
         outState.putInt(STATE_TEMPERATURE, temperature)
         outState.putInt(STATE_TINT, tint)
         outState.putInt(STATE_SATURATION, saturation)
+        outState.putInt(STATE_ADJUSTMENT, selectedAdjustmentIndex)
     }
 
     private fun restoreEditState(state: Bundle) {
@@ -267,10 +298,12 @@ class EditActivity : AppCompatActivity() {
         temperature = state.getInt(STATE_TEMPERATURE, 0)
         tint = state.getInt(STATE_TINT, 0)
         saturation = state.getInt(STATE_SATURATION, 100)
-        syncAdjustSeeks()
+        selectedAdjustmentIndex = state.getInt(STATE_ADJUSTMENT, 0).coerceIn(0, 7)
         binding.seekStraighten.progress = (straightenDeg * 2 + 90).roundToInt()
+        updateStraightenLabel()
         markCropSelected(cropButtonForState())
         highlightSelected(filterButtons(), filterButtonForState())
+        updateAdjustmentSelection()
     }
 
     private fun cropButtonForState(): Button = when {
@@ -369,6 +402,8 @@ class EditActivity : AppCompatActivity() {
         binding.tabRotate.setTextColor(if (tool == TOOL_ROTATE) active else idle)
         binding.tabFilter.setTextColor(if (tool == TOOL_FILTER) active else idle)
         binding.tabAdjust.setTextColor(if (tool == TOOL_ADJUST) active else idle)
+        currentTool = tool
+        updateAdjustGestureHint()
     }
 
     private fun markCropSelected(selected: Button) {
@@ -400,36 +435,149 @@ class EditActivity : AppCompatActivity() {
         updatePreview()
     }
 
-    private fun setupAdjustSeek(seekBar: SeekBar, onChange: (Int) -> Unit) {
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) onChange(progress)
-            }
-            override fun onStartTrackingTouch(s: SeekBar?) {}
-            override fun onStopTrackingTouch(s: SeekBar?) {}
-        })
+    private fun adjustmentButtons(): List<Button> = listOf(
+        binding.btnAdjustExposure, binding.btnAdjustBrightness,
+        binding.btnAdjustContrast, binding.btnAdjustHighlights,
+        binding.btnAdjustShadows, binding.btnAdjustTemperature,
+        binding.btnAdjustTint, binding.btnAdjustSaturation
+    )
+
+    private fun adjustmentLabelRes(index: Int): Int = when (index) {
+        0 -> R.string.adjust_exposure
+        1 -> R.string.adjust_brightness
+        2 -> R.string.adjust_contrast
+        3 -> R.string.adjust_highlights
+        4 -> R.string.adjust_shadows
+        5 -> R.string.adjust_temperature
+        6 -> R.string.adjust_tint
+        else -> R.string.adjust_saturation
     }
 
-    /** 从原图按当前结构状态重建工作位图 */
-    private fun rebuildWorking() {
+    private fun adjustmentValue(index: Int): Int = when (index) {
+        0 -> exposure
+        1 -> brightness
+        2 -> contrast - 100
+        3 -> highlights
+        4 -> shadows
+        5 -> temperature
+        6 -> tint
+        else -> saturation - 100
+    }
+
+    private fun selectAdjustment(index: Int) {
+        selectedAdjustmentIndex = index.coerceIn(0, 7)
+        updateAdjustmentSelection()
+    }
+
+    private fun updateAdjustmentSelection() {
+        val buttons = adjustmentButtons()
+        highlightSelected(buttons, buttons[selectedAdjustmentIndex.coerceIn(0, buttons.lastIndex)])
+        updateAdjustGestureHint()
+    }
+
+    private fun updateAdjustGestureHint() {
+        binding.tvAdjustGestureHint.text = getString(
+            R.string.adjust_gesture_format,
+            getString(adjustmentLabelRes(selectedAdjustmentIndex)),
+            formatSigned(adjustmentValue(selectedAdjustmentIndex))
+        )
+        binding.tvAdjustGestureHint.visibility = if (currentTool == TOOL_ADJUST) View.VISIBLE else View.GONE
+    }
+
+    private fun formatSigned(value: Int): String = when {
+        value > 0 -> "+$value"
+        else -> value.toString()
+    }
+
+    private fun handleAdjustmentTouch(event: MotionEvent): Boolean {
+        if (currentTool != TOOL_ADJUST) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                adjustmentStartX = event.x
+                adjustmentStartValue = adjustmentValue(selectedAdjustmentIndex)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val density = resources.displayMetrics.density
+                val delta = ((event.x - adjustmentStartX) / density).roundToInt()
+                setAdjustmentValue(selectedAdjustmentIndex, adjustmentStartValue + delta)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return true
+            else -> return true
+        }
+    }
+
+    private fun setAdjustmentValue(index: Int, value: Int) {
+        val v = value.coerceIn(-100, 100)
+        if (v == adjustmentValue(index)) return
+        when (index) {
+            0 -> exposure = v
+            1 -> brightness = v
+            2 -> contrast = v + 100
+            3 -> highlights = v
+            4 -> shadows = v
+            5 -> temperature = v
+            6 -> tint = v
+            else -> saturation = v + 100
+        }
+        updateAdjustGestureHint()
+        if (index <= 4) refreshTonalPreview() else updatePreview()
+    }
+
+    private data class StructureState(
+        val cropRatioW: Float,
+        val cropRatioH: Float,
+        val rotation: Int,
+        val straightenDeg: Float,
+        val flipH: Boolean,
+        val flipV: Boolean
+    )
+
+    private fun currentStructureState() = StructureState(
+        cropRatioW, cropRatioH, rotation, straightenDeg, flipH, flipV
+    )
+
+    /** 后台重建结构预览；拖动拉正时做短暂合并，避免每一帧都旋转整张图。 */
+    private fun rebuildWorking(delayMs: Long = 0L) {
         val src = originalBitmap ?: return
-        val built = applyStructure(src)
-        // 旧工作图不手工回收：后台 LUT/增强任务可能正在读它（见 onDestroy 说明）
-        workingBitmap = built
-        tonalBitmap = null
-        refreshTonalPreview()
+        val state = currentStructureState()
+        val generation = ++structureGeneration
+        tonalGen++
+        pendingStructurePreview?.let { binding.ivPreview.removeCallbacks(it) }
+        val task = Runnable {
+            pendingStructurePreview = null
+            executor.execute {
+                if (generation != structureGeneration) return@execute
+                val built = applyStructure(src, state)
+                runOnUiThread {
+                    if (generation == structureGeneration && originalBitmap === src && !isFinishing && !isDestroyed) {
+                        // 旧工作图可能仍被 LUT 任务读取；交给 GC 回收，避免并发 use-after-recycle。
+                        workingBitmap = built
+                        tonalBitmap = null
+                        filterPreviewSource = null
+                        filterPreviewBitmap = null
+                        refreshTonalPreview()
+                    } else if (built !== src && !built.isRecycled) {
+                        built.recycle()
+                    }
+                }
+            }
+        }
+        pendingStructurePreview = task
+        if (delayMs > 0L) binding.ivPreview.postDelayed(task, delayMs) else task.run()
     }
 
     /**
      * 对任意位图应用当前结构编辑（中心裁剪 → 旋转/拉正/镜像）。
      * 不回收输入位图；无实际变换时返回输入本身。
      */
-    private fun applyStructure(src: Bitmap): Bitmap {
+    private fun applyStructure(src: Bitmap, state: StructureState = currentStructureState()): Bitmap {
         var bmp = src
         var owned = false
 
-        if (cropRatioW > 0 && cropRatioH > 0) {
-            val target = cropRatioW / cropRatioH
+        if (state.cropRatioW > 0 && state.cropRatioH > 0) {
+            val target = state.cropRatioW / state.cropRatioH
             val srcRatio = bmp.width.toFloat() / bmp.height
             val w: Int
             val h: Int
@@ -449,25 +597,25 @@ class EditActivity : AppCompatActivity() {
         }
 
         // 90° 旋转后的内容尺寸（拉正的内接裁剪按此比例计算）
-        val contentW = if (rotation % 180 == 0) bmp.width else bmp.height
-        val contentH = if (rotation % 180 == 0) bmp.height else bmp.width
+        val contentW = if (state.rotation % 180 == 0) bmp.width else bmp.height
+        val contentH = if (state.rotation % 180 == 0) bmp.height else bmp.width
 
-        val totalRotation = rotation + straightenDeg
-        if (totalRotation != 0f || flipH || flipV) {
+        val totalRotation = state.rotation + state.straightenDeg
+        if (totalRotation != 0f || state.flipH || state.flipV) {
             val matrix = Matrix()
             if (totalRotation != 0f) matrix.postRotate(totalRotation)
-            if (flipH || flipV) {
-                matrix.postScale(if (flipH) -1f else 1f, if (flipV) -1f else 1f)
+            if (state.flipH || state.flipV) {
+                matrix.postScale(if (state.flipH) -1f else 1f, if (state.flipV) -1f else 1f)
             }
             val transformed = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
             if (owned) bmp.recycle()
             bmp = transformed
             owned = true
 
-            if (straightenDeg != 0f) {
+            if (state.straightenDeg != 0f) {
                 // 旋转后中心裁剪到与内容同比例的最大内接矩形，避免黑角
                 val a = contentW.toFloat() / contentH
-                val theta = Math.toRadians(abs(straightenDeg).toDouble())
+                val theta = Math.toRadians(abs(state.straightenDeg).toDouble())
                 val cosT = cos(theta).toFloat()
                 val sinT = sin(theta).toFloat()
                 val halfW = contentW / 2f
@@ -556,7 +704,7 @@ class EditActivity : AppCompatActivity() {
 
     // ---------- 色彩矩阵（滤镜/饱和度/色温/色调） ----------
 
-    private fun buildColorMatrix(): ColorMatrix {
+    private fun buildColorMatrix(index: Int = filterIndex): ColorMatrix {
         val sat = ColorMatrix().apply { setSaturation(saturation / 100f) }
         // 色温/色调：通道缩放（暖=加红减蓝，品红=减绿）
         val tk = temperature / 100f
@@ -576,7 +724,7 @@ class EditActivity : AppCompatActivity() {
         adjust.postConcat(tempTint)
         adjust.postConcat(sat)
 
-        val filter = filterMatrix(filterIndex)
+        val filter = filterMatrix(index)
         filter.postConcat(adjust)
         return filter
     }
@@ -628,6 +776,31 @@ class EditActivity : AppCompatActivity() {
         val bmp = tonalBitmap ?: workingBitmap ?: return
         binding.ivPreview.setImageBitmap(bmp)
         binding.ivPreview.colorFilter = ColorMatrixColorFilter(buildColorMatrix())
+        updateFilterPreviews()
+    }
+
+    /** 以当前照片为底图，给每种滤镜都显示一张轻量、实时着色的预览缩略图。 */
+    private fun updateFilterPreviews() {
+        val src = tonalBitmap ?: workingBitmap ?: return
+        val thumbnail = if (filterPreviewSource === src) {
+            filterPreviewBitmap ?: return
+        } else {
+            val scale = minOf(1f, 96f / maxOf(src.width, src.height))
+            val width = (src.width * scale).roundToInt().coerceAtLeast(1)
+            val height = (src.height * scale).roundToInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(src, width, height, true).also {
+                filterPreviewSource = src
+                filterPreviewBitmap = it
+            }
+        }
+        val previewViews = listOf(
+            binding.ivFilterNone, binding.ivFilterBw, binding.ivFilterSepia,
+            binding.ivFilterCool, binding.ivFilterWarm, binding.ivFilterVivid
+        )
+        previewViews.forEachIndexed { index, image ->
+            image.setImageBitmap(thumbnail)
+            image.colorFilter = ColorMatrixColorFilter(buildColorMatrix(index))
+        }
     }
 
     /** 按住"对比原图"：按下显示未调色的工作图，松开恢复编辑效果 */
@@ -730,7 +903,7 @@ class EditActivity : AppCompatActivity() {
                 highlights = newHighlights
                 shadows = newShadows
                 saturation = newSaturation
-                syncAdjustSeeks()
+                updateAdjustmentSelection()
                 refreshTonalPreview()
                 updatePreview()
                 Toast.makeText(this, R.string.edit_auto_done, Toast.LENGTH_SHORT).show()
@@ -754,24 +927,19 @@ class EditActivity : AppCompatActivity() {
         temperature = 0
         tint = 0
         saturation = 100
+        selectedAdjustmentIndex = 0
         binding.seekStraighten.progress = 90
-        syncAdjustSeeks()
+        updateStraightenLabel()
+        updateAdjustmentSelection()
         markCropSelected(binding.btnCropOriginal)
         highlightSelected(filterButtons(), binding.btnFilterNone)
         rebuildWorking()
         Toast.makeText(this, R.string.edit_reset_done, Toast.LENGTH_SHORT).show()
     }
 
-    /** 把当前调节状态同步到滑杆位置（编程式赋值不触发回调） */
-    private fun syncAdjustSeeks() {
-        binding.seekExposure.progress = exposure + 100
-        binding.seekBrightness.progress = brightness + 100
-        binding.seekContrast.progress = contrast
-        binding.seekHighlights.progress = highlights + 100
-        binding.seekShadows.progress = shadows + 100
-        binding.seekTemperature.progress = temperature + 100
-        binding.seekTint.progress = tint + 100
-        binding.seekSaturation.progress = saturation
+    private fun updateStraightenLabel() {
+        val angle = if (kotlin.math.abs(straightenDeg) < 0.05f) "0" else String.format(Locale.US, "%+.1f", straightenDeg)
+        binding.tvStraighten.text = getString(R.string.straighten_value, angle)
     }
 
     // ---------- 保存 / 壁纸 ----------

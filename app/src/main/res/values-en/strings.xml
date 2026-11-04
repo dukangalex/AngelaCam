@@ -61,6 +61,9 @@
     <string name="edit_reset">Reset</string>
     <string name="edit_auto_done">Auto enhance applied. You can keep fine-tuning.</string>
     <string name="edit_reset_done">All edits reset</string>
+    <string name="adjust_gesture_format">%1$s  %2$s · Swipe photo left/right</string>
+    <string name="straighten_tap_reset">Tap Straighten to reset to 0 degrees</string>
+    <string name="straighten_value">Straighten %1$s°</string>
     <string name="adjust_exposure">Exposure</string>
     <string name="adjust_highlights">Highlights</string>
     <string name="adjust_shadows">Shadows</string>

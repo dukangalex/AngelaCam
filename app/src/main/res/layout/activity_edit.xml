@@ -66,6 +66,21 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:scaleType="fitCenter" />
+
+        <TextView
+            android:id="@+id/tvAdjustGestureHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="#B3000000"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:visibility="gone" />
     </FrameLayout>
 
     <!-- 工具页签 -->
@@ -277,11 +292,17 @@
                 android:paddingTop="8dp">
 
                 <TextView
-                    android:layout_width="56dp"
+                    android:id="@+id/tvStraighten"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/straighten_tap_reset"
+                    android:focusable="true"
+                    android:gravity="center"
                     android:text="@string/straighten"
                     android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
+                    android:textSize="12sp" />
 
                 <SeekBar
                     android:id="@+id/seekStraighten"
@@ -293,7 +314,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 滤镜选项 -->
+        <!-- 滤镜预览 -->
         <HorizontalScrollView
             android:id="@+id/filterOptions"
             android:layout_width="match_parent"
@@ -306,66 +327,61 @@
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp">
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
 
-                <Button
-                    android:id="@+id/btnFilterNone"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_none"
-                    android:textColor="#FFFFFF" />
-
-                <Button
-                    android:id="@+id/btnFilterBw"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_bw"
-                    android:textColor="#FFFFFF" />
-
-                <Button
-                    android:id="@+id/btnFilterSepia"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_sepia"
-                    android:textColor="#FFFFFF" />
-
-                <Button
-                    android:id="@+id/btnFilterCool"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_cool"
-                    android:textColor="#FFFFFF" />
-
-                <Button
-                    android:id="@+id/btnFilterWarm"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_warm"
-                    android:textColor="#FFFFFF" />
-
-                <Button
-                    android:id="@+id/btnFilterVivid"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="72dp"
-                    android:background="@android:color/transparent"
-                    android:text="@string/filter_vivid"
-                    android:textColor="#FFFFFF" />
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterNone" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_none" />
+                    <Button android:id="@+id/btnFilterNone" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_none" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterBw" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_bw" />
+                    <Button android:id="@+id/btnFilterBw" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_bw" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterSepia" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_sepia" />
+                    <Button android:id="@+id/btnFilterSepia" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_sepia" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterCool" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_cool" />
+                    <Button android:id="@+id/btnFilterCool" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_cool" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterWarm" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_warm" />
+                    <Button android:id="@+id/btnFilterWarm" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_warm" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="84dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <ImageView android:id="@+id/ivFilterVivid" android:layout_width="72dp" android:layout_height="78dp" android:background="#303030" android:scaleType="centerCrop" android:contentDescription="@string/filter_vivid" />
+                    <Button android:id="@+id/btnFilterVivid" android:layout_width="match_parent" android:layout_height="40dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/filter_vivid" android:textColor="#FFFFFF" android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
         </HorizontalScrollView>
 
-        <!-- 调节选项：自动增强/重置 + 可滚动滑杆列表 -->
+        <!-- 调节：选择参数后，在照片上左右滑动即可微调 -->
         <LinearLayout
             android:id="@+id/adjustOptions"
             android:layout_width="match_parent"
@@ -375,219 +391,52 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
-
+                android:layout_height="46dp"
+                android:gravity="center"
+                android:orientation="horizontal">
                 <Button
                     android:id="@+id/btnAutoEnhance"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="46dp"
                     android:minWidth="96dp"
                     android:background="@android:color/transparent"
                     android:text="@string/edit_auto_enhance"
                     android:textColor="#4CAF50" />
-
                 <Button
                     android:id="@+id/btnReset"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="46dp"
                     android:minWidth="96dp"
                     android:background="@android:color/transparent"
                     android:text="@string/edit_reset"
                     android:textColor="#FFFFFF" />
             </LinearLayout>
 
-            <ScrollView
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1">
+                android:layout_height="52dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+                <Button android:id="@+id/btnAdjustExposure" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_exposure" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustBrightness" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_brightness" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustContrast" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_contrast" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustHighlights" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_highlights" android:textColor="#FFFFFF" android:textSize="12sp" />
+            </LinearLayout>
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingStart="24dp"
-                    android:paddingEnd="24dp"
-                    android:paddingBottom="8dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_exposure"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekExposure"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_brightness"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekBrightness"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_contrast"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekContrast"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_highlights"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekHighlights"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_shadows"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekShadows"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_temperature"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekTemperature"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_tint"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekTint"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="56dp"
-                            android:layout_height="wrap_content"
-                            android:text="@string/adjust_saturation"
-                            android:textColor="#FFFFFF"
-                            android:textSize="13sp" />
-
-                        <SeekBar
-                            android:id="@+id/seekSaturation"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:max="200"
-                            android:progress="100" />
-                    </LinearLayout>
-                </LinearLayout>
-            </ScrollView>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+                <Button android:id="@+id/btnAdjustShadows" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_shadows" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustTemperature" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_temperature" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustTint" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_tint" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/btnAdjustSaturation" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:background="@android:color/transparent" android:text="@string/adjust_saturation" android:textColor="#FFFFFF" android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
     </FrameLayout>
 
