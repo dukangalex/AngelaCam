@@ -625,17 +625,16 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- 取景快捷控制 ----------
     private fun showQuickControls() {
-        val panel = binding.quickControlsPanel
-        if (panel.visibility == View.VISIBLE) {
+        val controls = binding.quickControlsPanel
+        if (controls.root.visibility == View.VISIBLE) {
             closeQuickControls()
             return
         }
-        val controls = DialogCameraControlsBinding.bind(panel)
         quickControlsBinding = controls
         updateTimerUi()
         updateAspectUi()
         updateGridUi()
-        panel.visibility = View.VISIBLE
+        controls.root.visibility = View.VISIBLE
         binding.btnSettings.contentDescription = getString(R.string.desc_close_quick_controls)
         controls.btnCloseQuickControls.setOnClickListener { closeQuickControls() }
         controls.btnTimer.setOnClickListener { cycleTimer() }
@@ -647,7 +646,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun closeQuickControls() {
-        binding.quickControlsPanel.visibility = View.GONE
+        binding.quickControlsPanel.root.visibility = View.GONE
         quickControlsBinding = null
         binding.btnSettings.contentDescription = getString(R.string.desc_quick_controls)
     }
