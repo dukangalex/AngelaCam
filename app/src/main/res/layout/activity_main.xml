@@ -15,7 +15,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:scaleType="fillCenter" />
 
-    <!-- 九宫格构图线 -->
     <com.dukangalex.angelacam.GridOverlayView
         android:id="@+id/gridOverlay"
         android:layout_width="0dp"
@@ -26,106 +25,50 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 顶部轻量玻璃控制栏：保留宽阔取景区域 -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="58dp"
+    <!-- Two high-frequency shortcuts keep the top of the viewfinder quiet. -->
+    <ImageButton
+        android:id="@+id/btnFlash"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_marginStart="16dp"
         android:layout_marginTop="42dp"
-        android:layout_marginEnd="16dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp"
-        android:background="@drawable/bg_camera_top_rail"
+        android:background="@drawable/bg_camera_control"
+        android:contentDescription="@string/desc_flash"
         android:elevation="6dp"
-        app:layout_constraintTop_toTopOf="parent"
+        android:scaleType="center"
+        android:src="@drawable/ic_flash_auto"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-        <ImageButton
-            android:id="@+id/btnFlash"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_flash"
-            android:scaleType="center"
-            android:src="@drawable/ic_flash_auto" />
-        <Button
-            android:id="@+id/btnTimer"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:minHeight="44dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:background="@drawable/bg_camera_control"
-            android:text="@string/timer_off"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:fontFamily="sans-serif-medium" />
-        <Button
-            android:id="@+id/btnAspect"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:minHeight="44dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:background="@drawable/bg_camera_control"
-            android:text="@string/aspect_4_3"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:fontFamily="sans-serif-medium"
-            android:contentDescription="@string/desc_aspect" />
-        <ImageButton
-            android:id="@+id/btnGrid"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_grid"
-            android:scaleType="center"
-            android:src="@drawable/ic_grid_off" />
-        <ImageButton
-            android:id="@+id/btnSettings"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_settings"
-            android:scaleType="center"
-            android:src="@drawable/ic_settings" />
-        <ImageButton
-            android:id="@+id/btnSwitchCamera"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_switch_camera"
-            android:scaleType="center"
-            android:src="@drawable/ic_switch_camera" />
-    </LinearLayout>
-    <!-- 录像指示器 -->
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageButton
+        android:id="@+id/btnSettings"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="42dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_camera_control"
+        android:contentDescription="@string/desc_quick_controls"
+        android:elevation="6dp"
+        android:scaleType="center"
+        android:src="@drawable/ic_tune"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <LinearLayout
         android:id="@+id/recordingIndicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="112dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
+        android:layout_marginTop="104dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
         <View
             android:layout_width="12dp"
             android:layout_height="12dp"
             android:background="@drawable/recording_dot" />
-
         <TextView
             android:id="@+id/tvTimer"
             android:layout_width="wrap_content"
@@ -136,7 +79,6 @@
             android:textSize="16sp" />
     </LinearLayout>
 
-    <!-- 对焦框 -->
     <View
         android:id="@+id/focusRing"
         android:layout_width="@dimen/focus_ring_size"
@@ -144,7 +86,6 @@
         android:background="@drawable/focus_ring"
         android:visibility="invisible" />
 
-    <!-- 倒计时大数字 -->
     <TextView
         android:id="@+id/tvCountdown"
         android:layout_width="wrap_content"
@@ -157,43 +98,39 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 曝光补偿条 -->
     <LinearLayout
         android:id="@+id/exposureBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
         android:layout_marginStart="22dp"
         android:layout_marginEnd="22dp"
         android:layout_marginBottom="12dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:visibility="gone"
         android:background="@drawable/bg_camera_exposure"
         android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/bottomBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
             android:text="EV"
             android:textColor="#E9E7EB"
-            android:textSize="12sp"
-            android:fontFamily="sans-serif-medium" />
-
+            android:textSize="12sp" />
         <SeekBar
             android:id="@+id/seekExposure"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="12dp"
-            android:layout_marginEnd="12dp" />
-
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1" />
         <TextView
             android:id="@+id/tvEv"
             android:layout_width="64dp"
@@ -203,41 +140,49 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- 悬浮式拍摄底座：控件聚拢，取景区保持开阔 -->
+    <!-- Thumb, lens switch, shutter and mode stay in a thumb-reachable dock. -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
         android:layout_marginBottom="10dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="14dp"
-        android:paddingTop="12dp"
-        android:paddingEnd="14dp"
-        android:paddingBottom="12dp"
         android:background="@drawable/bg_camera_dock"
         android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
         <ImageButton
             android:id="@+id/btnThumbnail"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/thumbnail_bg"
             android:clipToOutline="true"
             android:contentDescription="@string/desc_thumbnail"
             android:scaleType="centerCrop" />
+        <ImageButton
+            android:id="@+id/btnSwitchCamera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_camera_control"
+            android:contentDescription="@string/desc_switch_camera"
+            android:scaleType="center"
+            android:src="@drawable/ic_switch_camera" />
         <Space
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
         <ImageButton
             android:id="@+id/btnShutter"
-            android:layout_width="82dp"
-            android:layout_height="82dp"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/desc_shutter"
             android:scaleType="center"
@@ -248,17 +193,30 @@
             android:layout_weight="1" />
         <Button
             android:id="@+id/btnMode"
-            android:layout_width="76dp"
+            android:layout_width="72dp"
             android:layout_height="44dp"
-            android:minWidth="76dp"
+            android:minWidth="72dp"
             android:minHeight="44dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
             android:background="@drawable/bg_camera_mode_chip"
             android:backgroundTint="@null"
-            android:text="@string/mode_video"
+            android:text="@string/mode_photo"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:fontFamily="sans-serif-medium" />
     </LinearLayout>
+    <include
+        android:id="@+id/quickControlsPanel"
+        layout="@layout/dialog_camera_controls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:elevation="12dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/exposureBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

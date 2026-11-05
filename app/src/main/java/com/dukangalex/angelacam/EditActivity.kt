@@ -222,6 +222,7 @@ class EditActivity : AppCompatActivity() {
         } else {
             restoreEditState(savedInstanceState)
         }
+        updateSaveButtonHighlight()
         showTool(TOOL_CROP)
 
         executor.execute {
@@ -332,6 +333,11 @@ class EditActivity : AppCompatActivity() {
             temperature != 0 || tint != 0 || saturation != 100
 
     /** 退出前确认：有未保存编辑时先问一句，避免误触丢成果 */
+    private fun updateSaveButtonHighlight() {
+        val highlighted = wallpaperMode || isEdited()
+        binding.btnSave.setTextColor(if (highlighted) 0xFF4CAF50.toInt() else 0xFFFFFFFF.toInt())
+    }
+
     private fun attemptExit() {
         if (!isEdited()) {
             finish()
@@ -432,6 +438,7 @@ class EditActivity : AppCompatActivity() {
     private fun setFilter(index: Int, button: Button) {
         filterIndex = index
         highlightSelected(filterButtons(), button)
+        updateSaveButtonHighlight()
         updatePreview()
     }
 
@@ -522,6 +529,7 @@ class EditActivity : AppCompatActivity() {
             else -> saturation = v + 100
         }
         updateAdjustGestureHint()
+        updateSaveButtonHighlight()
         if (index <= 4) refreshTonalPreview() else updatePreview()
     }
 
@@ -540,6 +548,7 @@ class EditActivity : AppCompatActivity() {
 
     /** 后台重建结构预览；拖动拉正时做短暂合并，避免每一帧都旋转整张图。 */
     private fun rebuildWorking(delayMs: Long = 0L) {
+        updateSaveButtonHighlight()
         val src = originalBitmap ?: return
         val state = currentStructureState()
         val generation = ++structureGeneration
@@ -903,6 +912,7 @@ class EditActivity : AppCompatActivity() {
                 highlights = newHighlights
                 shadows = newShadows
                 saturation = newSaturation
+                updateSaveButtonHighlight()
                 updateAdjustmentSelection()
                 refreshTonalPreview()
                 updatePreview()

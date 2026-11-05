@@ -8,6 +8,15 @@
     <string name="desc_shutter">拍摄</string>
     <string name="desc_thumbnail">我的相册</string>
     <string name="desc_grid">构图辅助线</string>
+    <string name="desc_quick_controls">快捷控制</string>
+    <string name="desc_close_quick_controls">关闭快捷控制</string>
+    <string name="desc_current_mode">当前模式：%1$s，点击切换</string>
+    <string name="quick_controls_title">快捷控制</string>
+    <string name="quick_controls_done">完成</string>
+    <string name="quick_timer">定时</string>
+    <string name="quick_aspect">画幅</string>
+    <string name="quick_grid">构图线</string>
+    <string name="quick_settings">设置</string>
     <string name="desc_back">返回</string>
     <string name="desc_delete">删除</string>
     <string name="desc_share">分享</string>

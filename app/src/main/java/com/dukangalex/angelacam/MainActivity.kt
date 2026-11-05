@@ -49,6 +49,7 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
 import com.dukangalex.angelacam.databinding.ActivityMainBinding
+import com.dukangalex.angelacam.databinding.DialogCameraControlsBinding
 import com.dukangalex.angelacam.databinding.DialogSettingsBinding
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -60,6 +61,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var quickControlsBinding: DialogCameraControlsBinding? = null
     private lateinit var cameraExecutor: ExecutorService
 
     /** 非相机后台活（缩略图、拍照后期、更新检查）专用，避免挤占拍照回调线程 */
@@ -170,10 +172,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnFlash.setOnClickListener { cycleFlash() }
         binding.btnSwitchCamera.setOnClickListener { switchCamera() }
         binding.btnThumbnail.setOnClickListener { openGallery() }
-        binding.btnTimer.setOnClickListener { cycleTimer() }
-        binding.btnGrid.setOnClickListener { cycleGrid() }
-        binding.btnAspect.setOnClickListener { cycleAspect() }
-        binding.btnSettings.setOnClickListener { showSettings() }
+        binding.btnSettings.setOnClickListener { showQuickControls() }
         updateFlashIcon()
         updateModeUi()
         updateTimerUi()
@@ -195,6 +194,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         uiHandler.removeCallbacks(timerRunnable)
         uiHandler.removeCallbacksAndMessages(null)
+        quickControlsBinding = null
         cameraExecutor.shutdown()
         backgroundExecutor.shutdown()
         mediaActionSound?.release()
@@ -409,14 +409,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTimerUi() {
-        binding.btnTimer.isSelected = timerSeconds > 0
-        binding.btnTimer.text = when (timerSeconds) {
+        val controls = quickControlsBinding ?: return
+        controls.btnTimer.isSelected = timerSeconds > 0
+        controls.btnTimer.text = when (timerSeconds) {
             3 -> getString(R.string.timer_3s)
             10 -> getString(R.string.timer_10s)
             else -> getString(R.string.timer_off)
         }
-        // 倒计时只在拍照模式有效
-        binding.btnTimer.visibility = if (photoMode) View.VISIBLE else View.INVISIBLE
+        // 倒计时只在拍照模式有效；录像模式下其余快捷控件自动铺满面板。
+        controls.timerControl.visibility = if (photoMode) View.VISIBLE else View.GONE
     }
 
     private fun startCountdown() {
@@ -527,8 +528,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateModeUi() {
-        binding.btnMode.text =
-            if (photoMode) getString(R.string.mode_video) else getString(R.string.mode_photo)
+        val currentMode = getString(if (photoMode) R.string.mode_photo else R.string.mode_video)
+        binding.btnMode.text = currentMode
+        binding.btnMode.contentDescription = getString(R.string.desc_current_mode, currentMode)
+        binding.btnMode.isSelected = photoMode
     }
 
     private fun cycleFlash() {
@@ -585,11 +588,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateGridUi() {
         binding.gridOverlay.mode = gridMode
-        binding.btnGrid.isSelected = gridMode != GridOverlayView.MODE_OFF
-        binding.btnGrid.setImageResource(
-            if (gridMode == GridOverlayView.MODE_OFF) R.drawable.ic_grid_off
-            else R.drawable.ic_grid
-        )
+        quickControlsBinding?.btnGrid?.apply {
+            isSelected = gridMode != GridOverlayView.MODE_OFF
+            setImageResource(
+                if (gridMode == GridOverlayView.MODE_OFF) R.drawable.ic_grid_off
+                else R.drawable.ic_grid
+            )
+        }
     }
 
     // ---------- 画幅比 ----------
@@ -606,16 +611,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateAspectUi() {
-        binding.btnAspect.isSelected = aspectRatio != ASPECT_4_3
-        binding.btnAspect.text = when (aspectRatio) {
-            ASPECT_16_9 -> getString(R.string.aspect_16_9)
-            ASPECT_1_1 -> getString(R.string.aspect_1_1)
-            else -> getString(R.string.aspect_4_3)
+        quickControlsBinding?.btnAspect?.apply {
+            isSelected = aspectRatio != ASPECT_4_3
+            text = when (aspectRatio) {
+                ASPECT_16_9 -> getString(R.string.aspect_16_9)
+                ASPECT_1_1 -> getString(R.string.aspect_1_1)
+                else -> getString(R.string.aspect_4_3)
+            }
         }
     }
 
-    // ---------- 设置弹窗 ----------
 
+
+    // ---------- 取景快捷控制 ----------
+    private fun showQuickControls() {
+        val panel = binding.quickControlsPanel
+        if (panel.visibility == View.VISIBLE) {
+            closeQuickControls()
+            return
+        }
+        val controls = DialogCameraControlsBinding.bind(panel)
+        quickControlsBinding = controls
+        updateTimerUi()
+        updateAspectUi()
+        updateGridUi()
+        panel.visibility = View.VISIBLE
+        binding.btnSettings.contentDescription = getString(R.string.desc_close_quick_controls)
+        controls.btnCloseQuickControls.setOnClickListener { closeQuickControls() }
+        controls.btnTimer.setOnClickListener { cycleTimer() }
+        controls.btnAspect.setOnClickListener { cycleAspect() }
+        controls.btnGrid.setOnClickListener { cycleGrid() }
+        controls.btnAdvancedSettings.setOnClickListener {
+            closeQuickControls()
+            showSettings()
+        }
+    }
+    private fun closeQuickControls() {
+        binding.quickControlsPanel.visibility = View.GONE
+        quickControlsBinding = null
+        binding.btnSettings.contentDescription = getString(R.string.desc_quick_controls)
+    }
+    // ---------- 设置弹窗 ----------
     private fun showSettings() {
         val view = DialogSettingsBinding.inflate(LayoutInflater.from(this))
         view.switchMirror.isChecked = mirrorSelfie

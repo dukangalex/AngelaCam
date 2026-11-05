@@ -9,6 +9,15 @@
     <string name="desc_shutter">Take Photo</string>
     <string name="desc_thumbnail">Gallery</string>
     <string name="desc_grid">Grid Lines</string>
+    <string name="desc_quick_controls">Quick controls</string>
+    <string name="desc_close_quick_controls">Close quick controls</string>
+    <string name="desc_current_mode">Current mode: %1$s. Tap to switch.</string>
+    <string name="quick_controls_title">Quick controls</string>
+    <string name="quick_controls_done">Done</string>
+    <string name="quick_timer">Timer</string>
+    <string name="quick_aspect">Aspect</string>
+    <string name="quick_grid">Grid</string>
+    <string name="quick_settings">Settings</string>
     <string name="desc_back">Back</string>
     <string name="desc_delete">Delete</string>
     <string name="desc_share">Share</string>

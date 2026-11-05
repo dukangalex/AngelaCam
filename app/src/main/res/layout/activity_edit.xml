@@ -50,7 +50,7 @@
             android:layout_height="48dp"
             android:background="@android:color/transparent"
             android:text="@string/edit_save"
-            android:textColor="#4CAF50"
+            android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold" />
     </LinearLayout>
