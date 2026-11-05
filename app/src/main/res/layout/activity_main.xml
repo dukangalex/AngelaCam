@@ -198,7 +198,7 @@
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
             android:background="@drawable/bg_camera_mode_chip"
-            android:backgroundTint="@null"
+            android:backgroundTint="@color/camera_mode_background"
             android:text="@string/mode_photo"
             android:textColor="@color/camera_mode_text"
             android:textSize="13sp"
