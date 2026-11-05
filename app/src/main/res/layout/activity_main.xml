@@ -140,7 +140,7 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Thumb, lens switch, shutter and mode stay in a thumb-reachable dock. -->
+    <!-- Keep the shutter centered; lens switching sits away from the gallery. -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
@@ -167,14 +167,6 @@
             android:clipToOutline="true"
             android:contentDescription="@string/desc_thumbnail"
             android:scaleType="centerCrop" />
-        <ImageButton
-            android:id="@+id/btnSwitchCamera"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_switch_camera"
-            android:scaleType="center"
-            android:src="@drawable/ic_switch_camera" />
         <Space
             android:layout_width="0dp"
             android:layout_height="1dp"
@@ -187,10 +179,16 @@
             android:contentDescription="@string/desc_shutter"
             android:scaleType="center"
             android:src="@drawable/ic_shutter" />
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+        <ImageButton
+            android:id="@+id/btnSwitchCamera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_camera_control"
+            android:contentDescription="@string/desc_switch_camera"
+            android:scaleType="center"
+            android:src="@drawable/ic_switch_camera" />
         <Button
             android:id="@+id/btnMode"
             android:layout_width="72dp"
@@ -202,7 +200,7 @@
             android:background="@drawable/bg_camera_mode_chip"
             android:backgroundTint="@null"
             android:text="@string/mode_photo"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/camera_mode_text"
             android:textSize="13sp"
             android:fontFamily="sans-serif-medium" />
     </LinearLayout>

@@ -531,7 +531,8 @@ class MainActivity : AppCompatActivity() {
         val currentMode = getString(if (photoMode) R.string.mode_photo else R.string.mode_video)
         binding.btnMode.text = currentMode
         binding.btnMode.contentDescription = getString(R.string.desc_current_mode, currentMode)
-        binding.btnMode.isSelected = photoMode
+        // This chip labels the active mode, so it stays highlighted in both modes.
+        binding.btnMode.isSelected = true
     }
 
     private fun cycleFlash() {
