@@ -13,7 +13,6 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
@@ -26,6 +25,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * 照片/视频查看器 v1.2.0：
@@ -117,7 +117,7 @@ class DetailActivity : AppCompatActivity() {
         super.onDestroy()
         uiHandler.removeCallbacks(slideshowRunnable)
         binding.viewPager.unregisterOnPageChangeCallback(pageCallback)
-        ioExecutor.shutdown()
+        ioExecutor.shutdownNow()
     }
 
     private fun currentItem(): CaptureStore.Item? =
@@ -135,7 +135,17 @@ class DetailActivity : AppCompatActivity() {
 
     private inner class PagerAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        inner class PhotoVH(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
+        inner class PhotoVH(val imageView: ZoomImageView) : RecyclerView.ViewHolder(imageView) {
+            var requestGeneration = 0L
+            var decodeFuture: Future<*>? = null
+
+            fun invalidateDecodeRequest(): Long {
+                requestGeneration += 1L
+                decodeFuture?.cancel(true)
+                decodeFuture = null
+                return requestGeneration
+            }
+        }
         inner class VideoVH(val videoView: VideoView) : RecyclerView.ViewHolder(videoView)
 
         override fun getItemViewType(position: Int): Int =
@@ -154,12 +164,11 @@ class DetailActivity : AppCompatActivity() {
                 videoView.setMediaController(controller)
                 VideoVH(videoView)
             } else {
-                val imageView = ImageView(parent.context).apply {
+                val imageView = ZoomImageView(parent.context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    scaleType = ImageView.ScaleType.FIT_CENTER
                 }
                 PhotoVH(imageView)
             }
@@ -171,15 +180,24 @@ class DetailActivity : AppCompatActivity() {
             val uri = Uri.parse(items[position].uri)
             when (holder) {
                 is PhotoVH -> {
-                    // 后台采样解码（上限 2048）：原 setImageURI 在主线程全分辨率
-                    // 同步解码，12MP 单张约 48MB，滑动必卡且有 OOM 风险
-                    holder.imageView.tag = items[position].uri
-                    holder.imageView.setImageDrawable(null)
-                    ioExecutor.execute {
+                    // Every bind owns one request token. A moved/recycled holder can never accept an older decode.
+                    val uriString = items[position].uri
+                    val requestToken = holder.invalidateDecodeRequest()
+                    holder.imageView.displayBitmap(null)
+                    holder.decodeFuture = ioExecutor.submit {
                         val bmp = loadSampledBitmap(uri, DETAIL_MAX_SIZE)
                         runOnUiThread {
-                            if (holder.imageView.tag == items.getOrNull(position)?.uri) {
-                                holder.imageView.setImageBitmap(bmp)
+                            val currentPosition = holder.bindingAdapterPosition
+                            val stillBoundToThisItem = holder.requestGeneration == requestToken &&
+                                currentPosition != RecyclerView.NO_POSITION &&
+                                items.getOrNull(currentPosition)?.uri == uriString &&
+                                !isFinishing && !isDestroyed
+                            if (stillBoundToThisItem && bmp != null) {
+                                holder.decodeFuture = null
+                                holder.imageView.displayBitmap(bmp)
+                            } else {
+                                if (holder.requestGeneration == requestToken) holder.decodeFuture = null
+                                if (bmp != null && !bmp.isRecycled) bmp.recycle()
                             }
                         }
                     }
@@ -201,8 +219,8 @@ class DetailActivity : AppCompatActivity() {
                 holder.videoView.stopPlayback()
             }
             if (holder is PhotoVH) {
-                holder.imageView.tag = null
-                holder.imageView.setImageDrawable(null)
+                holder.invalidateDecodeRequest()
+                holder.imageView.displayBitmap(null)
             }
             super.onViewRecycled(holder)
         }

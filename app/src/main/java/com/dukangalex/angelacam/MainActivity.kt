@@ -28,6 +28,7 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowManager
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -87,6 +88,8 @@ class MainActivity : AppCompatActivity() {
     private var shutterSound = true
     private var tapCapture = false
     private var autoUpdateCheck = false
+    @Volatile private var availableUpdateInfo: UpdateChecker.UpdateInfo? = null
+    private var updateEntryView: TextView? = null
 
     private lateinit var prefs: SharedPreferences
     private var mediaActionSound: MediaActionSound? = null
@@ -162,6 +165,7 @@ class MainActivity : AppCompatActivity() {
         shutterSound = prefs.getBoolean(KEY_SHUTTER_SOUND, true)
         tapCapture = prefs.getBoolean(KEY_TAP_CAPTURE, false)
         autoUpdateCheck = prefs.getBoolean(KEY_AUTO_UPDATE, false)
+        availableUpdateInfo = loadCachedAvailableUpdate()
         mediaActionSound = MediaActionSound().apply {
             load(MediaActionSound.SHUTTER_CLICK)
         }
@@ -185,6 +189,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        availableUpdateInfo = loadCachedAvailableUpdate()
+        refreshUpdateEntry()
         // 从系统设置补开权限回来时自动启动相机，不用用户重启应用
         if (!cameraStarted && hasCameraPermission()) startCamera()
         if (hasCameraPermission()) updateThumbnail()
@@ -658,10 +664,15 @@ class MainActivity : AppCompatActivity() {
         view.switchShutterSound.isChecked = shutterSound
         view.switchTapCapture.isChecked = tapCapture
         view.switchAutoUpdate.isChecked = autoUpdateCheck
+        updateEntryView = view.tvUpdateAvailable
+        view.tvUpdateAvailable.setOnClickListener {
+            availableUpdateInfo?.let { info -> UpdateInstaller.promptUpdate(this, info) }
+        }
+        refreshUpdateEntry(view.tvUpdateAvailable)
         view.btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
         }
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.settings_title)
             .setView(view.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -677,7 +688,11 @@ class MainActivity : AppCompatActivity() {
                     .apply()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        dialog.setOnDismissListener {
+            if (updateEntryView === view.tvUpdateAvailable) updateEntryView = null
+        }
+        dialog.show()
     }
 
     /**
@@ -692,9 +707,74 @@ class MainActivity : AppCompatActivity() {
         backgroundExecutor.execute {
             val result = UpdateChecker.check(this)
             prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, now).apply()
-            if (result is UpdateChecker.Result.Available) {
-                runOnUiThread { UpdateInstaller.promptUpdate(this, result.info) }
+            when (result) {
+                is UpdateChecker.Result.Available -> {
+                    availableUpdateInfo = result.info
+                    cacheAvailableUpdate(result.info)
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            refreshUpdateEntry()
+                            UpdateInstaller.promptUpdate(this, result.info)
+                        }
+                    }
+                }
+                UpdateChecker.Result.UpToDate -> {
+                    availableUpdateInfo = null
+                    clearCachedAvailableUpdate()
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) refreshUpdateEntry()
+                    }
+                }
+                is UpdateChecker.Result.Failed -> Unit // Keep a previously verified result visible offline.
             }
+        }
+    }
+
+    private fun loadCachedAvailableUpdate(): UpdateChecker.UpdateInfo? {
+        val version = prefs.getString(KEY_AVAILABLE_UPDATE_VERSION, null) ?: return null
+        if (!UpdateChecker.isNewer(version, UpdateChecker.currentVersion(this))) {
+            clearCachedAvailableUpdate()
+            return null
+        }
+        val releaseUrl = prefs.getString(KEY_AVAILABLE_UPDATE_RELEASE_URL, null).orEmpty()
+        val downloadUrl = prefs.getString(KEY_AVAILABLE_UPDATE_DOWNLOAD_URL, null).orEmpty()
+        if (releaseUrl.isBlank() || downloadUrl.isBlank()) {
+            clearCachedAvailableUpdate()
+            return null
+        }
+        return UpdateChecker.UpdateInfo(
+            version = version,
+            notes = prefs.getString(KEY_AVAILABLE_UPDATE_NOTES, "").orEmpty(),
+            downloadUrl = downloadUrl,
+            htmlUrl = releaseUrl
+        )
+    }
+
+    private fun cacheAvailableUpdate(info: UpdateChecker.UpdateInfo) {
+        prefs.edit()
+            .putString(KEY_AVAILABLE_UPDATE_VERSION, info.version)
+            .putString(KEY_AVAILABLE_UPDATE_NOTES, info.notes)
+            .putString(KEY_AVAILABLE_UPDATE_DOWNLOAD_URL, info.downloadUrl)
+            .putString(KEY_AVAILABLE_UPDATE_RELEASE_URL, info.htmlUrl)
+            .apply()
+    }
+
+    private fun clearCachedAvailableUpdate() {
+        prefs.edit()
+            .remove(KEY_AVAILABLE_UPDATE_VERSION)
+            .remove(KEY_AVAILABLE_UPDATE_NOTES)
+            .remove(KEY_AVAILABLE_UPDATE_DOWNLOAD_URL)
+            .remove(KEY_AVAILABLE_UPDATE_RELEASE_URL)
+            .apply()
+    }
+
+    private fun refreshUpdateEntry(target: TextView? = updateEntryView) {
+        val view = target ?: return
+        val info = availableUpdateInfo
+        view.visibility = if (info == null) View.GONE else View.VISIBLE
+        if (info != null) {
+            view.text = getString(R.string.setting_update_available, info.version)
+            view.contentDescription = getString(R.string.setting_update_available_accessibility, info.version)
         }
     }
 
@@ -844,6 +924,10 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_TAP_CAPTURE = "tap_capture"
         private const val KEY_AUTO_UPDATE = "auto_update_check"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+        private const val KEY_AVAILABLE_UPDATE_VERSION = "available_update_version"
+        private const val KEY_AVAILABLE_UPDATE_NOTES = "available_update_notes"
+        private const val KEY_AVAILABLE_UPDATE_DOWNLOAD_URL = "available_update_download_url"
+        private const val KEY_AVAILABLE_UPDATE_RELEASE_URL = "available_update_release_url"
 
         private const val ASPECT_4_3 = 0
         private const val ASPECT_16_9 = 1

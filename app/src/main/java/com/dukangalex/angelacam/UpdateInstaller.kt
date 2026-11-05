@@ -6,6 +6,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import java.net.URL
 
 /**
@@ -29,6 +31,31 @@ object UpdateInstaller {
 
     /** 弹出更新提示框：确认后跳浏览器打开 Release 页 */
     fun promptUpdate(activity: AppCompatActivity, info: UpdateChecker.UpdateInfo) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            showUpdateDialog(activity, info)
+            return
+        }
+        val observer = object : LifecycleEventObserver {
+            override fun onStateChanged(source: androidx.lifecycle.LifecycleOwner, event: Lifecycle.Event) {
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        source.lifecycle.removeObserver(this)
+                        if (!activity.isFinishing && !activity.isDestroyed &&
+                            activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                        ) {
+                            showUpdateDialog(activity, info)
+                        }
+                    }
+                    Lifecycle.Event.ON_DESTROY -> source.lifecycle.removeObserver(this)
+                    else -> Unit
+                }
+            }
+        }
+        activity.lifecycle.addObserver(observer)
+    }
+
+    private fun showUpdateDialog(activity: AppCompatActivity, info: UpdateChecker.UpdateInfo) {
         val notes = info.notes.trim().ifEmpty { activity.getString(R.string.update_notes_empty) }
         AlertDialog.Builder(activity)
             .setTitle(activity.getString(R.string.update_dialog_title, info.version))

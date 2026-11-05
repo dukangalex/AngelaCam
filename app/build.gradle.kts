@@ -11,8 +11,8 @@ android {
         applicationId = "com.dukangalex.angelacam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.9.2"
+        versionCode = 15
+        versionName = "1.9.3"
 
         vectorDrawables {
             useSupportLibrary = true
