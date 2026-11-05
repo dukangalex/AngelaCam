@@ -11,12 +11,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import java.net.URL
 
 /**
- * 更新提示（2026-10-28 审计处置，类名沿用以免动调用点）：
- * 本应用不再下载、安装更新包——「侧载应用自带装包能力」正是 Play Protect
- * 把应用判为有害的主要行为信号，且 REQUEST_INSTALL_PACKAGES 属于高敏感权限。
- * 现在只做一件事：弹窗告知新版本，用户点「前往下载新版本」后用浏览器打开
- * GitHub Release 页自行下载安装（与关于页的手动更新指引一致）。
- * 跳转前照旧校验域名白名单与 https，不打开白名单外的地址。
+ * 安全更新入口：应用不在自身进程下载或安装 APK。设置页的新版本状态行单击后，
+ * 直接通过浏览器打开经 HTTPS 与域名白名单校验的 APK 下载地址；关于页的确认弹窗
+ * 仍然打开 GitHub Release 页面。保留此类与现有调用点，避免改变其它更新流程。
  */
 object UpdateInstaller {
 

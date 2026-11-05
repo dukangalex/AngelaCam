@@ -781,16 +781,17 @@ class MainActivity : AppCompatActivity() {
         val currentVersionText = getString(R.string.setting_current_version, currentVersion)
         installedVersionView?.text = currentVersionText
         val info = availableUpdateInfo
+        val updateAccessibilityText = info?.let {
+            getString(R.string.setting_update_available_accessibility, currentVersion, it.version)
+        }
         updateStatusContainer?.isEnabled = info != null
-        updateStatusContainer?.contentDescription = info?.let {
-            getString(R.string.setting_update_available_accessibility, it.version)
-        } ?: currentVersionText
+        updateStatusContainer?.contentDescription = updateAccessibilityText ?: currentVersionText
 
         val view = target ?: return
         view.visibility = if (info == null) View.GONE else View.VISIBLE
         if (info != null) {
             view.text = getString(R.string.setting_update_available, info.version)
-            view.contentDescription = getString(R.string.setting_update_available_accessibility, info.version)
+            view.contentDescription = updateAccessibilityText
         }
     }
 

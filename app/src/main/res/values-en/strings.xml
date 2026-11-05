@@ -130,8 +130,8 @@
     <string name="setting_auto_update">Check for Updates on Launch</string>
     <string name="setting_auto_update_summary">Checks at most once a day, connects to GitHub only; off by default</string>
     <string name="setting_current_version">Current version v%1$s</string>
-    <string name="setting_update_available">Update v%1$s · Tap to download</string>
-    <string name="setting_update_available_accessibility">Tap to download the v%1$s APK directly</string>
+    <string name="setting_update_available">Update v%1$s · Tap to download APK</string>
+    <string name="setting_update_available_accessibility">Current version v%1$s. Update v%2$s available; tap to download the APK directly.</string>
     <string name="about_open_releases">Download New Version</string>
     <string name="about_license_title">Open Source License</string>
     <string name="about_license_body">This app is open source under the GPL-3.0 license.</string>
