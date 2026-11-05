@@ -89,7 +89,9 @@ class MainActivity : AppCompatActivity() {
     private var tapCapture = false
     private var autoUpdateCheck = false
     @Volatile private var availableUpdateInfo: UpdateChecker.UpdateInfo? = null
+    private var installedVersionView: TextView? = null
     private var updateEntryView: TextView? = null
+    private var updateStatusContainer: View? = null
 
     private lateinit var prefs: SharedPreferences
     private var mediaActionSound: MediaActionSound? = null
@@ -664,9 +666,11 @@ class MainActivity : AppCompatActivity() {
         view.switchShutterSound.isChecked = shutterSound
         view.switchTapCapture.isChecked = tapCapture
         view.switchAutoUpdate.isChecked = autoUpdateCheck
+        installedVersionView = view.tvInstalledVersion
         updateEntryView = view.tvUpdateAvailable
-        view.tvUpdateAvailable.setOnClickListener {
-            availableUpdateInfo?.let { info -> UpdateInstaller.promptUpdate(this, info) }
+        updateStatusContainer = view.updateStatusContainer
+        view.updateStatusContainer.setOnClickListener {
+            availableUpdateInfo?.let { info -> UpdateInstaller.openApkDownload(this, info) }
         }
         refreshUpdateEntry(view.tvUpdateAvailable)
         view.btnAbout.setOnClickListener {
@@ -690,7 +694,11 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .create()
         dialog.setOnDismissListener {
-            if (updateEntryView === view.tvUpdateAvailable) updateEntryView = null
+            if (updateEntryView === view.tvUpdateAvailable) {
+                installedVersionView = null
+                updateEntryView = null
+                updateStatusContainer = null
+            }
         }
         dialog.show()
     }
@@ -713,8 +721,8 @@ class MainActivity : AppCompatActivity() {
                     cacheAvailableUpdate(result.info)
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) {
+                            // 更新只显示在设置行；用户点击提示时直接打开 APK 下载。
                             refreshUpdateEntry()
-                            UpdateInstaller.promptUpdate(this, result.info)
                         }
                     }
                 }
@@ -769,8 +777,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshUpdateEntry(target: TextView? = updateEntryView) {
-        val view = target ?: return
+        val currentVersion = UpdateChecker.currentVersion(this)
+        val currentVersionText = getString(R.string.setting_current_version, currentVersion)
+        installedVersionView?.text = currentVersionText
         val info = availableUpdateInfo
+        updateStatusContainer?.isEnabled = info != null
+        updateStatusContainer?.contentDescription = info?.let {
+            getString(R.string.setting_update_available_accessibility, it.version)
+        } ?: currentVersionText
+
+        val view = target ?: return
         view.visibility = if (info == null) View.GONE else View.VISIBLE
         if (info != null) {
             view.text = getString(R.string.setting_update_available, info.version)

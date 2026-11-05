@@ -137,23 +137,42 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
 
-            <TextView
-                android:id="@+id/tvUpdateAvailable"
+            <LinearLayout
+                android:id="@+id/updateStatusContainer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:ellipsize="end"
                 android:focusable="true"
                 android:gravity="center_vertical|end"
-                android:maxLines="1"
                 android:minHeight="48dp"
+                android:orientation="vertical"
                 android:paddingStart="12dp"
-                android:paddingEnd="8dp"
-                android:textColor="#D0B5FF"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:paddingEnd="8dp">
+
+                <TextView
+                    android:id="@+id/tvInstalledVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:importantForAccessibility="no"
+                    android:textColor="#AAAAAA"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvUpdateAvailable"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="end"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:textColor="#D0B5FF"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 

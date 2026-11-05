@@ -45,6 +45,33 @@ jobs:
             adb exec-out screencap -p > smoke-launch.png
             adb shell pidof com.dukangalex.angelacam > /dev/null || { echo APP_NOT_ALIVE; exit 1; }
             echo APP_ALIVE_OK
+            # Seed a synthetic cached update so the visible row is deterministic and offline.
+            adb shell am force-stop com.dukangalex.angelacam
+            adb root
+            adb wait-for-device
+            printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><boolean name="auto_update_check" value="false" /><string name="available_update_version">9.9.9</string><string name="available_update_notes">smoke test</string><string name="available_update_download_url">https://github.com/dukangalex/AngelaCam/releases/download/v9.9.9/app-release.apk</string><string name="available_update_release_url">https://github.com/dukangalex/AngelaCam/releases/tag/v9.9.9</string></map>' > update-prefs.xml
+            adb push update-prefs.xml /data/local/tmp/update-prefs.xml
+            adb shell mkdir -p /data/data/com.dukangalex.angelacam/shared_prefs
+            adb shell cp /data/local/tmp/update-prefs.xml /data/data/com.dukangalex.angelacam/shared_prefs/angelacam_settings.xml
+            adb shell chown "$(adb shell pm list packages -U com.dukangalex.angelacam | sed -n 's/.*uid://p' | tr -d '\r'):$(adb shell pm list packages -U com.dukangalex.angelacam | sed -n 's/.*uid://p' | tr -d '\r')" /data/data/com.dukangalex.angelacam/shared_prefs/angelacam_settings.xml
+            adb shell chmod 600 /data/data/com.dukangalex.angelacam/shared_prefs/angelacam_settings.xml
+            adb shell restorecon -RF /data/data/com.dukangalex.angelacam/shared_prefs
+            adb shell am start -n com.dukangalex.angelacam/.MainActivity
+            sleep 8
+            adb shell uiautomator dump /sdcard/home-ui.xml
+            adb pull /sdcard/home-ui.xml home-ui.xml
+            adb shell input tap $(python3 -c "import sys,xml.etree.ElementTree as E,re; n=next(x for x in E.parse(sys.argv[1]).iter('node') if x.get('resource-id','').endswith('/'+sys.argv[2])); b=list(map(int,re.findall(r'\d+',n.get('bounds','')))); print((b[0]+b[2])//2,(b[1]+b[3])//2)" home-ui.xml btnSettings)
+            sleep 2
+            adb shell uiautomator dump /sdcard/quick-controls-ui.xml
+            adb pull /sdcard/quick-controls-ui.xml quick-controls-ui.xml
+            adb shell input tap $(python3 -c "import sys,xml.etree.ElementTree as E,re; n=next(x for x in E.parse(sys.argv[1]).iter('node') if x.get('resource-id','').endswith('/'+sys.argv[2])); b=list(map(int,re.findall(r'\d+',n.get('bounds','')))); print((b[0]+b[2])//2,(b[1]+b[3])//2)" quick-controls-ui.xml btnAdvancedSettings)
+            sleep 2
+            adb shell uiautomator dump /sdcard/settings-ui.xml
+            adb pull /sdcard/settings-ui.xml settings-ui.xml
+            grep -E -q "Current version v1.9.4|当前版本 v1.9.4" settings-ui.xml
+            grep -E -q "Update v9.9.9|有新版本 v9.9.9" settings-ui.xml
+            python3 -c "import sys,xml.etree.ElementTree as E; n=next(x for x in E.parse(sys.argv[1]).iter('node') if x.get('resource-id','').endswith('/updateStatusContainer')); assert n.get('clickable')=='true'; print('UPDATE_STATUS_CLICKABLE_OK')" settings-ui.xml
+            adb exec-out screencap -p > smoke-settings.png
             adb shell cmd package query-activities --brief -a android.intent.action.VIEW -t image/jpeg > view-image.txt
             cat view-image.txt
             grep -qi angelacam view-image.txt && echo VIEW_IMAGE_OK || { echo VIEW_IMAGE_MISSING; exit 1; }
@@ -57,5 +84,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: angelacam-smoke-screenshot
-          path: smoke-launch.png
+          path: |
+            smoke-launch.png
+            smoke-settings.png
+            settings-ui.xml
           if-no-files-found: warn

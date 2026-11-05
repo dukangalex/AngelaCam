@@ -29,7 +29,24 @@ object UpdateInstaller {
         "objects.githubusercontent.com"
     )
 
-    /** 弹出更新提示框：确认后跳浏览器打开 Release 页 */
+    /** 直接在浏览器打开经过白名单校验的 APK 地址，不经过发行说明页。 */
+    fun openApkDownload(activity: AppCompatActivity, info: UpdateChecker.UpdateInfo) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        try {
+            val url = URL(info.downloadUrl)
+            require(url.protocol == "https" && url.host in ALLOWED_HOSTS) { "下载地址不在白名单" }
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
+        } catch (e: Exception) {
+            Log.w(TAG, "打开 APK 下载失败", e)
+            Toast.makeText(
+                activity,
+                activity.getString(R.string.update_open_failed),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /** 关于页的手动检查仍保留发行说明确认流程。 */
     fun promptUpdate(activity: AppCompatActivity, info: UpdateChecker.UpdateInfo) {
         if (activity.isFinishing || activity.isDestroyed) return
         if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {

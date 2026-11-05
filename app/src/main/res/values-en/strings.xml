@@ -129,8 +129,9 @@
     <string name="update_go_settings">Open Settings</string>
     <string name="setting_auto_update">Check for Updates on Launch</string>
     <string name="setting_auto_update_summary">Checks at most once a day, connects to GitHub only; off by default</string>
-    <string name="setting_update_available">New version v%1$s ›</string>
-    <string name="setting_update_available_accessibility">Tap to view and download version %1$s</string>
+    <string name="setting_current_version">Current version v%1$s</string>
+    <string name="setting_update_available">Update v%1$s · Tap to download</string>
+    <string name="setting_update_available_accessibility">Tap to download the v%1$s APK directly</string>
     <string name="about_open_releases">Download New Version</string>
     <string name="about_license_title">Open Source License</string>
     <string name="about_license_body">This app is open source under the GPL-3.0 license.</string>
@@ -161,5 +162,5 @@
     <string name="edit_discard_message">Your edits haven\'t been saved. Leaving now will lose them.</string>
     <string name="edit_discard_ok">Discard</string>
     <string name="edit_discard_cancel">Keep editing</string>
-    <string name="update_open_failed">Couldn\'t open the download page \u2014 please try again later</string>
+    <string name="update_open_failed">Couldn\'t open the APK download \u2014 please try again later</string>
 </resources>
