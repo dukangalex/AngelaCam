@@ -19,13 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Download APK from dev-latest
+      - name: Download APK from dev-latest (authenticated)
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -sSL --retry 3 -o app-release.apk \
-            https://github.com/dukangalex/AngelaCam/releases/download/dev-latest/app-release.apk
-          ls -la app-release.apk
+          gh release download dev-latest --repo dukangalex/AngelaCam --pattern app-release.apk --output app-release.apk
+          python3 -c "import hashlib,os,zipfile; p='app-release.apk'; z=zipfile.ZipFile(p); assert os.path.getsize(p)>1000000; assert 'AndroidManifest.xml' in z.namelist(); assert z.testzip() is None; print('APK_DOWNLOAD_OK bytes='+str(os.path.getsize(p))+' sha256='+hashlib.sha256(open(p,'rb').read()).hexdigest())"
 
       - name: Smoke test on emulator
         uses: reactivecircus/android-emulator-runner@v2
