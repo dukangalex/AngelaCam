@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [34]
+        api-level: [29, 30, 34]
     steps:
       - name: Checkout source for UI smoke
         uses: actions/checkout@v4
