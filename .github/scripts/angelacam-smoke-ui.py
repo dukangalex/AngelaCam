@@ -115,6 +115,43 @@ def capture_diagnostics(reason):
         )
 
 
+def wait_for_activity(component, timeout=90):
+    deadline = time.time() + timeout
+    started = time.time()
+    next_report = 15
+    last_pid = ""
+    last_top = ""
+    while time.time() < deadline:
+        try:
+            process = subprocess.run(
+                ["adb", "shell", "pidof", PACKAGE], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, timeout=10,
+            )
+            last_pid = process.stdout.strip()
+            if last_pid:
+                activities = subprocess.run(
+                    ["adb", "shell", "dumpsys", "activity", "activities"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, timeout=20,
+                )
+                top_lines = [
+                    line.strip() for line in activities.stdout.splitlines()
+                    if "topResumedActivity" in line or "ResumedActivity:" in line
+                ]
+                last_top = " | ".join(top_lines)
+                if activities.returncode == 0 and any(component in line for line in top_lines):
+                    print("MAIN_ACTIVITY_RESUMED_OK", last_pid, flush=True)
+                    return last_pid
+        except Exception as exc:
+            last_top = f"{type(exc).__name__}: {exc}"
+        elapsed = time.time() - started
+        if elapsed >= next_report:
+            print(f"WAIT_MAIN_ACTIVITY elapsed={int(elapsed)}s pid={last_pid or '-'} top={last_top or '-'}", flush=True)
+            next_report += 15
+        time.sleep(3)
+    capture_diagnostics("MainActivity did not become foreground: " + (last_top or "no activity state"))
+    raise TimeoutError(f"MainActivity did not become foreground within {timeout}s; pid={last_pid!r}; top={last_top!r}")
+
 def dump_ui(name, attempts=3):
     remote = f"/sdcard/{name}"
     last_error = ""
@@ -253,16 +290,12 @@ def main():
     adb("install", "-r", apk)
     seed_update_preferences()
     adb("logcat", "-c", check=False)
-    start_output = adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
-    if "Status: ok" not in start_output:
-        capture_diagnostics("MainActivity launch did not return Status: ok")
-        raise RuntimeError("MainActivity did not report a successful launch")
-    time.sleep(20)
-    app_pid = adb("shell", "pidof", PACKAGE, check=False).strip()
-    if not app_pid:
-        capture_diagnostics("AngelaCam process missing after MainActivity launch")
-        raise RuntimeError("AngelaCam process is not running after MainActivity launch")
-    print("MAIN_ACTIVITY_PROCESS_ALIVE", app_pid, flush=True)
+    start_output = adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
+    if "Error:" in start_output:
+        capture_diagnostics("am start reported an error: " + start_output.strip())
+        raise RuntimeError("MainActivity could not be started")
+    app_pid = wait_for_activity(f"{PACKAGE}/.MainActivity")
+    time.sleep(3)
     root = dump_ui("smoke-home.xml")
     if recover_system_anr(root):
         time.sleep(5)
