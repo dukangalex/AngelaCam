@@ -56,4 +56,5 @@ jobs:
             smoke-quick-controls.xml
             settings-ui.xml
             gallery-permission-disclosure.xml
+            smoke-diagnostics/**
           if-no-files-found: warn

@@ -65,6 +65,56 @@ def seed_update_preferences():
     adb("shell", "restorecon", "-RF", PREFS_DIR, check=False)
 
 
+_diagnostics_captured = False
+
+
+def capture_diagnostics(reason):
+    global _diagnostics_captured
+    if _diagnostics_captured:
+        return
+    _diagnostics_captured = True
+    directory = Path("smoke-diagnostics")
+    directory.mkdir(exist_ok=True)
+    (directory / "reason.txt").write_text(reason + "\n", encoding="utf-8")
+    print(f"CAPTURING_STARTUP_DIAGNOSTICS reason={reason}", flush=True)
+    commands = (
+        ("adb-state.txt", ["get-state"]),
+        ("app-pid.txt", ["shell", "pidof", PACKAGE]),
+        ("activity.txt", ["shell", "dumpsys", "activity", "activities"]),
+        ("windows.txt", ["shell", "dumpsys", "window", "windows"]),
+        ("processes.txt", ["shell", "ps", "-A"]),
+        ("logcat.txt", ["logcat", "-d", "-v", "threadtime", "-t", "2000"]),
+    )
+    for filename, args in commands:
+        try:
+            result = subprocess.run(
+                ["adb", *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=12,
+            )
+            text = f"$ adb {' '.join(args)}\nexit={result.returncode}\n{result.stdout}"
+        except Exception as exc:
+            text = f"$ adb {' '.join(args)}\nERROR: {type(exc).__name__}: {exc}\n"
+        (directory / filename).write_text(text, encoding="utf-8", errors="replace")
+        print(f"DIAGNOSTIC_CAPTURE {filename} bytes={len(text.encode('utf-8'))}", flush=True)
+    try:
+        result = subprocess.run(
+            ["adb", "exec-out", "screencap", "-p"], stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=12,
+        )
+        if result.returncode == 0 and result.stdout:
+            (directory / "screen.png").write_bytes(result.stdout)
+            print(f"DIAGNOSTIC_CAPTURE screen.png bytes={len(result.stdout)}", flush=True)
+        else:
+            (directory / "screen-error.txt").write_text(
+                result.stderr.decode(errors="replace") or f"exit={result.returncode}\n",
+                encoding="utf-8",
+            )
+    except Exception as exc:
+        (directory / "screen-error.txt").write_text(
+            f"{type(exc).__name__}: {exc}\n", encoding="utf-8"
+        )
+
+
 def dump_ui(name, attempts=3):
     remote = f"/sdcard/{name}"
     last_error = ""
@@ -82,6 +132,8 @@ def dump_ui(name, attempts=3):
         remove_output = adb("shell", "rm", "-f", remote, check=False)
         if "transport endpoint is not connected" in remove_output.lower():
             last_error = remove_output.strip()
+            if name == "smoke-home.xml":
+                capture_diagnostics("ADB transport lost before home UI dump")
             if attempt < attempts:
                 print(f"UI_DUMP_DEVICE_RETRY {attempt}/{attempts}: {last_error}", flush=True)
                 continue
@@ -89,6 +141,8 @@ def dump_ui(name, attempts=3):
         output = adb("shell", "uiautomator", "dump", remote, check=False)
         if "UI hierchary dumped to:" not in output:
             last_error = output.strip() or "uiautomator produced no success marker"
+            if name == "smoke-home.xml":
+                capture_diagnostics("home UI hierarchy dump failed: " + last_error)
         else:
             try:
                 adb("pull", remote, name)
@@ -198,8 +252,17 @@ def main():
 
     adb("install", "-r", apk)
     seed_update_preferences()
-    adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
+    adb("logcat", "-c", check=False)
+    start_output = adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+    if "Status: ok" not in start_output:
+        capture_diagnostics("MainActivity launch did not return Status: ok")
+        raise RuntimeError("MainActivity did not report a successful launch")
     time.sleep(20)
+    app_pid = adb("shell", "pidof", PACKAGE, check=False).strip()
+    if not app_pid:
+        capture_diagnostics("AngelaCam process missing after MainActivity launch")
+        raise RuntimeError("AngelaCam process is not running after MainActivity launch")
+    print("MAIN_ACTIVITY_PROCESS_ALIVE", app_pid, flush=True)
     root = dump_ui("smoke-home.xml")
     if recover_system_anr(root):
         time.sleep(5)
