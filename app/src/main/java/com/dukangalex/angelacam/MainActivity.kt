@@ -655,7 +655,7 @@ class MainActivity : AppCompatActivity() {
                 is VideoRecordEvent.Status -> {
                     if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE &&
                         externalVideoSizeLimitBytes > 0L &&
-                        event.recordingStats.recordedBytes >= externalVideoSizeLimitBytes
+                        event.recordingStats.numBytesRecorded >= externalVideoSizeLimitBytes
                     ) {
                         recording?.stop()
                     }
