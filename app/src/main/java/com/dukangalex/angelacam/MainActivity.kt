@@ -1,6 +1,7 @@
 package com.dukangalex.angelacam
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -75,6 +76,14 @@ class MainActivity : AppCompatActivity() {
     private var camera: Camera? = null
     private var cameraProvider: ProcessCameraProvider? = null
 
+    // Android 10 and earlier may resolve these as third-party camera handlers.
+    // Android 11+ restricts implicit capture resolution to preinstalled system cameras;
+    // callers may still explicitly target this activity when they choose AngelaCam.
+    private var externalCaptureAction: String? = null
+    private var externalOutputUri: Uri? = null
+    private var externalVideoDurationLimitMillis = 0L
+    private var externalVideoSizeLimitBytes = 0L
+
     private var lensFacing = CameraSelector.LENS_FACING_BACK
     private var flashMode = ImageCapture.FLASH_MODE_AUTO
     private var torchOn = false
@@ -108,12 +117,18 @@ class MainActivity : AppCompatActivity() {
             uiHandler.postDelayed(this, 500)
         }
     }
+    private val externalVideoLimitRunnable = Runnable {
+        if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE) recording?.stop()
+    }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
             if (grants[Manifest.permission.CAMERA] == true) {
                 startCamera()
-                updateThumbnail()
+                if (externalCaptureAction == null) updateThumbnail()
+            } else if (externalCaptureAction != null) {
+                Toast.makeText(this, R.string.perm_camera_message, Toast.LENGTH_SHORT).show()
+                cancelExternalCapture()
             } else {
                 showCameraPermissionDenied()
             }
@@ -162,6 +177,30 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
         backgroundExecutor = Executors.newSingleThreadExecutor()
 
+        externalCaptureAction = intent.action?.takeIf {
+            it == MediaStore.ACTION_IMAGE_CAPTURE || it == MediaStore.ACTION_VIDEO_CAPTURE
+        }
+        if (intent.action == "android.media.action.IMAGE_CAPTURE_SECURE") {
+            setResult(Activity.RESULT_CANCELED)
+            finish()
+            return
+        }
+        externalOutputUri = if (externalCaptureAction != null) readCaptureOutputUri() else null
+        if (externalCaptureAction != null && intent.hasExtra(MediaStore.EXTRA_OUTPUT) && externalOutputUri == null) {
+            setResult(Activity.RESULT_CANCELED)
+            finish()
+            return
+        }
+        if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE) {
+            photoMode = false
+            externalVideoDurationLimitMillis = runCatching {
+                intent.getIntExtra(MediaStore.EXTRA_DURATION_LIMIT, 0).coerceAtLeast(0) * 1000L
+            }.getOrDefault(0L)
+            externalVideoSizeLimitBytes = runCatching {
+                intent.getLongExtra(MediaStore.EXTRA_SIZE_LIMIT, 0L).coerceAtLeast(0L)
+            }.getOrDefault(0L)
+        }
+
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         mirrorSelfie = prefs.getBoolean(KEY_MIRROR, true)
         shutterSound = prefs.getBoolean(KEY_SHUTTER_SOUND, true)
@@ -184,9 +223,14 @@ class MainActivity : AppCompatActivity() {
         updateTimerUi()
         updateAspectUi()
         updateGridUi()
+        if (externalCaptureAction != null) {
+            binding.btnMode.visibility = View.GONE
+            binding.btnThumbnail.visibility = View.GONE
+            binding.btnSettings.visibility = View.GONE
+        }
 
         requestPermissionsIfNeeded()
-        maybeAutoCheckUpdate()
+        if (externalCaptureAction == null) maybeAutoCheckUpdate()
     }
 
     override fun onResume() {
@@ -195,7 +239,7 @@ class MainActivity : AppCompatActivity() {
         refreshUpdateEntry()
         // 从系统设置补开权限回来时自动启动相机，不用用户重启应用
         if (!cameraStarted && hasCameraPermission()) startCamera()
-        if (hasCameraPermission()) updateThumbnail()
+        if (hasCameraPermission() && externalCaptureAction == null) updateThumbnail()
     }
 
     override fun onDestroy() {
@@ -306,6 +350,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val capture = imageCapture ?: return
+        val externalImageCapture = externalCaptureAction == MediaStore.ACTION_IMAGE_CAPTURE
         val name = "AngelaCam_${timestamp()}.jpg"
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -330,31 +375,152 @@ class MainActivity : AppCompatActivity() {
         }
         capture.takePicture(output, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(results: ImageCapture.OutputFileResults) {
-                results.savedUri?.let { uri ->
-                    // 后期处理（解码/裁剪/镜像）与记录写入移到后台线程，
-                    // 不占用拍照回调线程，快门恢复不等它
-                    backgroundExecutor.execute {
-                        // v1.1.0: 1:1 画幅中心裁剪 / 前置自拍镜像
-                        postProcessPhoto(uri)
-                        CaptureStore.add(this@MainActivity, uri, "image/jpeg", name)
+                val uri = results.savedUri
+                if (uri == null) {
+                    runOnUiThread {
+                        binding.btnShutter.isEnabled = true
+                        Toast.makeText(this@MainActivity, R.string.toast_photo_failed, Toast.LENGTH_SHORT).show()
+                        if (externalImageCapture) cancelExternalCapture()
                     }
+                    return
+                }
+                backgroundExecutor.execute {
+                    // Keep the existing CameraX/MediaStore path for AngelaCam's own album.
+                    postProcessPhoto(uri)
+                    CaptureStore.add(this@MainActivity, uri, "image/jpeg", name)
+                    if (externalImageCapture) completeExternalPhoto(uri)
                 }
                 runOnUiThread {
                     binding.btnShutter.isEnabled = true
-                    Toast.makeText(this@MainActivity, R.string.toast_photo_saved, Toast.LENGTH_SHORT).show()
-                    updateThumbnail()
+                    if (!externalImageCapture) {
+                        Toast.makeText(this@MainActivity, R.string.toast_photo_saved, Toast.LENGTH_SHORT).show()
+                        updateThumbnail()
+                    }
                 }
             }
 
             override fun onError(exc: ImageCaptureException) {
                 runOnUiThread {
                     binding.btnShutter.isEnabled = true
-                    // 只给用户看人话，异常原文只进日志
                     Toast.makeText(this@MainActivity, R.string.toast_photo_failed, Toast.LENGTH_SHORT).show()
+                    if (externalImageCapture) cancelExternalCapture()
                 }
                 Log.e(TAG, "拍照失败", exc)
             }
         })
+    }
+
+    /** Accept only the content URI explicitly supplied by the caller. */
+    private fun readCaptureOutputUri(): Uri? {
+        val candidate = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(MediaStore.EXTRA_OUTPUT, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(MediaStore.EXTRA_OUTPUT)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "无法读取拍摄输出 URI", e)
+            null
+        }
+        return candidate?.takeIf { it.scheme == "content" }
+    }
+
+    private fun completeExternalPhoto(savedUri: Uri) {
+        if (externalCaptureAction != MediaStore.ACTION_IMAGE_CAPTURE || isFinishing || isDestroyed) return
+        try {
+            val resultUri = externalOutputUri ?: savedUri
+            if (externalOutputUri != null && externalOutputUri != savedUri) {
+                copyContentUri(savedUri, resultUri)
+            }
+            val result = Intent().apply {
+                setDataAndType(resultUri, "image/jpeg")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (externalOutputUri == null) {
+                    createResultThumbnail(savedUri)?.let { putExtra("data", it) }
+                }
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    setResult(Activity.RESULT_OK, result)
+                    finish()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "向调用方返回照片失败", e)
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    Toast.makeText(this, R.string.toast_photo_failed, Toast.LENGTH_SHORT).show()
+                    cancelExternalCapture()
+                }
+            }
+        }
+    }
+
+    private fun createResultThumbnail(uri: Uri) = try {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) null else {
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 512) sample *= 2
+            val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+            contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, options) }
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "生成拍摄结果缩略图失败", e)
+        null
+    }
+
+    private fun copyContentUri(source: Uri, target: Uri) {
+        require(source.scheme == "content" && target.scheme == "content")
+        if (source == target) return
+        val input = contentResolver.openInputStream(source)
+            ?: throw IllegalStateException("无法读取拍摄结果")
+        val output = contentResolver.openOutputStream(target, "w")
+            ?: throw IllegalStateException("无法写入调用方提供的 URI")
+        input.use { inputStream -> output.use { outputStream -> inputStream.copyTo(outputStream) } }
+    }
+
+    private fun completeExternalVideo(savedUri: Uri) {
+        if (externalCaptureAction != MediaStore.ACTION_VIDEO_CAPTURE || isFinishing || isDestroyed) return
+        val outputUri = externalOutputUri
+        if (outputUri == null) {
+            deliverCaptureResult(savedUri, "video/mp4")
+        } else {
+            backgroundExecutor.execute {
+                try {
+                    copyContentUri(savedUri, outputUri)
+                    deliverCaptureResult(outputUri, "video/mp4")
+                } catch (e: Exception) {
+                    Log.e(TAG, "向调用方返回视频失败", e)
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            Toast.makeText(this, R.string.toast_record_failed, Toast.LENGTH_SHORT).show()
+                            cancelExternalCapture()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun deliverCaptureResult(uri: Uri, mimeType: String) {
+        val result = Intent().apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                setResult(Activity.RESULT_OK, result)
+                finish()
+            }
+        }
+    }
+
+    private fun cancelExternalCapture() {
+        if (externalCaptureAction == null || isFinishing || isDestroyed) return
+        setResult(Activity.RESULT_CANCELED)
+        finish()
     }
 
     /**
@@ -486,6 +652,14 @@ class MainActivity : AppCompatActivity() {
         recording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
             when (event) {
                 is VideoRecordEvent.Start -> onRecordStart()
+                is VideoRecordEvent.Status -> {
+                    if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE &&
+                        externalVideoSizeLimitBytes > 0L &&
+                        event.recordingStats.recordedBytes >= externalVideoSizeLimitBytes
+                    ) {
+                        recording?.stop()
+                    }
+                }
                 is VideoRecordEvent.Finalize -> onRecordFinalize(event, name)
                 else -> { /* 忽略其他事件 */ }
             }
@@ -497,6 +671,10 @@ class MainActivity : AppCompatActivity() {
         binding.tvTimer.text = "00:00"
         recordStartMs = SystemClock.elapsedRealtime()
         uiHandler.post(timerRunnable)
+        if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE && externalVideoDurationLimitMillis > 0L) {
+            uiHandler.removeCallbacks(externalVideoLimitRunnable)
+            uiHandler.postDelayed(externalVideoLimitRunnable, externalVideoDurationLimitMillis)
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         Toast.makeText(this, R.string.toast_record_start, Toast.LENGTH_SHORT).show()
     }
@@ -505,16 +683,21 @@ class MainActivity : AppCompatActivity() {
         recording = null
         binding.recordingIndicator.visibility = View.GONE
         uiHandler.removeCallbacks(timerRunnable)
+        uiHandler.removeCallbacks(externalVideoLimitRunnable)
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (!event.hasError()) {
-            event.outputResults.outputUri.let { uri ->
-                CaptureStore.add(this, uri, "video/mp4", name)
+            val uri = event.outputResults.outputUri
+            CaptureStore.add(this, uri, "video/mp4", name)
+            if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE) {
+                completeExternalVideo(uri)
+            } else {
+                Toast.makeText(this, R.string.toast_video_saved, Toast.LENGTH_SHORT).show()
+                updateThumbnail()
             }
-            Toast.makeText(this, R.string.toast_video_saved, Toast.LENGTH_SHORT).show()
-            updateThumbnail()
         } else {
             Toast.makeText(this, R.string.toast_record_failed, Toast.LENGTH_SHORT).show()
             Log.e(TAG, "录像失败 cause=${event.cause}", event.cause)
+            if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE) cancelExternalCapture()
         }
     }
 

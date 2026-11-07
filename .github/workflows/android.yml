@@ -48,6 +48,13 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
+      # Validate and prepare a release-specific body before publishing any asset.
+      - name: Prepare version-specific release notes
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python3 .github/scripts/extract-release-notes.py "$RELEASE_TAG" RELEASE_NOTES.md release-notes.md
+
       - name: Publish dev-latest
         uses: softprops/action-gh-release@v2
         with:
@@ -56,12 +63,12 @@ jobs:
           body: "正式签名的 release 版 APK，可直接安装；后续版本可覆盖更新。"
           files: app/build/outputs/apk/release/app-release.apk
 
-      # 手动触发且填了版本号时，额外发布正式版 release（tag 自动创建，说明取自 RELEASE_NOTES.md）
+      # 手动触发且填了版本号时，只发布该版本在 RELEASE_NOTES.md 中的说明段落。
       - name: Publish versioned release
         if: ${{ inputs.release_tag != '' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag }}
           name: ${{ inputs.release_tag }}
-          body_path: RELEASE_NOTES.md
+          body_path: release-notes.md
           files: app/build/outputs/apk/release/app-release.apk

@@ -139,8 +139,32 @@ def main():
 
     main_source = Path("app/src/main/java/com/dukangalex/angelacam/MainActivity.kt").read_text(encoding="utf-8")
     installer_source = Path("app/src/main/java/com/dukangalex/angelacam/UpdateInstaller.kt").read_text(encoding="utf-8")
+    gallery_source = Path("app/src/main/java/com/dukangalex/angelacam/GalleryActivity.kt").read_text(encoding="utf-8")
+    external_view_source = Path("app/src/main/java/com/dukangalex/angelacam/ExternalViewActivity.kt").read_text(encoding="utf-8")
+    manifest_source = Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     assert "UpdateInstaller.openApkDownload(this, info)" in main_source
     assert "Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl))" in installer_source
+    assert "Intent.ACTION_GET_CONTENT" in gallery_source
+    assert "CaptureStore.list(this)" in gallery_source
+    assert "FLAG_GRANT_READ_URI_PERMISSION" in gallery_source
+    assert "MediaStore.ACTION_IMAGE_CAPTURE" in main_source
+    assert "MediaStore.ACTION_VIDEO_CAPTURE" in main_source
+    assert "MediaStore.EXTRA_OUTPUT" in main_source
+    assert "android.media.action.IMAGE_CAPTURE_SECURE" not in manifest_source
+    assert 'android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"' in manifest_source
+    assert 'android.permission.READ_MEDIA_IMAGES' in manifest_source
+    assert 'android.permission.READ_MEDIA_VIDEO' in manifest_source
+    assert 'android.permission.READ_MEDIA_VISUAL_USER_SELECTED' in manifest_source
+    assert 'showMediaPermissionDisclosure' in gallery_source
+    assert 'ContextCompat.checkSelfPermission' in gallery_source
+    assert 'queryDeviceMedia(access)' in gallery_source
+    assert 'Intent.ACTION_PICK' in gallery_source
+    assert 'segments.indexOf("images")' in gallery_source
+    assert 'segments.getOrNull(imagesIndex + 1) == "media"' in gallery_source
+    assert 'setOf("content", "file")' in external_view_source
+    assert 'setOnErrorListener' in external_view_source
+    assert 'takeIf { it.isNotEmpty() }' in external_view_source
+    print("BUILT_IN_PICKER_AND_SAFE_URI_SOURCE_OK", flush=True)
     print("DIRECT_APK_ACTION_SOURCE_OK", flush=True)
 
     adb("install", "-r", apk)
@@ -182,6 +206,74 @@ def main():
         if PACKAGE not in result:
             raise RuntimeError(f"AngelaCam VIEW intent filter missing for {mime}")
         print("VIEW_INTENT_OK", mime, flush=True)
+
+    get_content = adb("shell", "cmd", "package", "query-activities", "--brief",
+                      "-a", "android.intent.action.GET_CONTENT", "-t", "image/jpeg")
+    if PACKAGE not in get_content:
+        raise RuntimeError("AngelaCam image GET_CONTENT picker is missing")
+    print("IMAGE_GET_CONTENT_INTENT_OK", flush=True)
+
+    pick = adb("shell", "cmd", "package", "query-activities", "--brief",
+               "-a", "android.intent.action.PICK", "-t", "image/jpeg")
+    if PACKAGE not in pick:
+        raise RuntimeError("AngelaCam image ACTION_PICK handler is missing")
+    pick_collection = adb("shell", "cmd", "package", "query-activities", "--brief",
+                          "-a", "android.intent.action.PICK",
+                          "-d", "content://media/external/images/media")
+    if PACKAGE not in pick_collection:
+        raise RuntimeError("AngelaCam ACTION_PICK did not match the standard MediaStore image collection URI")
+    print("IMAGE_PICK_INTENT_OK", flush=True)
+
+    api_level = int(adb("shell", "getprop", "ro.build.version.sdk").strip())
+    capture_actions = (
+        "android.media.action.IMAGE_CAPTURE",
+        "android.media.action.VIDEO_CAPTURE",
+    )
+    for action in capture_actions:
+        result = adb("shell", "cmd", "package", "query-activities", "--brief", "-a", action)
+        if api_level >= 30 and PACKAGE in result:
+            raise RuntimeError(f"Android {api_level} incorrectly exposes AngelaCam for implicit {action}")
+        if api_level <= 29 and PACKAGE not in result:
+            raise RuntimeError(f"Android {api_level} should offer AngelaCam for {action}")
+        print("CAMERA_INTENT_POLICY_OK", api_level, action, flush=True)
+
+    secure_capture = adb("shell", "cmd", "package", "query-activities", "--brief",
+                         "-a", "android.media.action.IMAGE_CAPTURE_SECURE")
+    if PACKAGE in secure_capture:
+        raise RuntimeError("AngelaCam must not advertise secure camera capture")
+    print("SECURE_CAPTURE_NOT_ADVERTISED_OK", flush=True)
+
+    if api_level >= 30:
+        explicit = adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity",
+                       "-a", "android.media.action.IMAGE_CAPTURE")
+        if "Status: ok" not in explicit:
+            raise RuntimeError("Explicit caller-targeted image capture entry did not start")
+        print("EXPLICIT_CAMERA_INTENT_ENTRY_OK", api_level, flush=True)
+
+    gallery_launch = adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.GalleryActivity",
+                         "-a", "android.intent.action.GET_CONTENT", "-t", "image/jpeg",
+                         "-c", "android.intent.category.OPENABLE")
+    if "Status: ok" not in gallery_launch:
+        raise RuntimeError("AngelaCam image picker activity did not start")
+    time.sleep(3)
+    permission_ui = dump_ui("gallery-permission-disclosure.xml")
+    visible_text = " ".join(node.get("text", "") for node in iter_nodes(permission_ui))
+    if ("To select device photos in AngelaCam's built-in gallery" not in visible_text and
+            "为了在 AngelaCam 内置相册中选择设备照片" not in visible_text):
+        raise RuntimeError("Image picker did not show its media-access disclosure before requesting permission")
+
+    if api_level >= 34:
+        permission_names = (
+            "android.permission.READ_MEDIA_IMAGES",
+            "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        )
+    else:
+        permission_names = ("android.permission.READ_EXTERNAL_STORAGE",)
+    for permission in permission_names:
+        state = adb("shell", "pm", "check-permission", permission, PACKAGE).strip().lower()
+        if state == "granted":
+            raise RuntimeError(f"Media permission was granted before user consent: {permission}")
+    print("MEDIA_DISCLOSURE_BEFORE_RUNTIME_PERMISSION_OK", api_level, flush=True)
 
 
 if __name__ == "__main__":

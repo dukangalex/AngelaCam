@@ -16,8 +16,13 @@ permissions:
 jobs:
   smoke:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    name: smoke-api-${{ matrix.api-level }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 30, 34]
     steps:
       - name: Checkout source for UI smoke
         uses: actions/checkout@v4
@@ -33,7 +38,7 @@ jobs:
       - name: Smoke test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: ${{ matrix.api-level }}
           target: default
           arch: x86_64
           profile: pixel_4
@@ -43,11 +48,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: angelacam-smoke-screenshot
+          name: angelacam-smoke-screenshot-api-${{ matrix.api-level }}
           path: |
             smoke-launch.png
             smoke-settings.png
             smoke-home.xml
             smoke-quick-controls.xml
             settings-ui.xml
+            gallery-permission-disclosure.xml
           if-no-files-found: warn
