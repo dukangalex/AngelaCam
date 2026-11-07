@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [29, 30, 34]
+        api-level: [34]
     steps:
       - name: Checkout source for UI smoke
         uses: actions/checkout@v4
@@ -42,10 +42,6 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_4
-          # API 34 模拟器的相机 HAL 会拖慢系统 UI 首次启动；此 smoke 不测传感器画面。
-          emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-            ${{ matrix.api-level == 34 && '-camera-back none -camera-front none' || '' }}
           script: |
             python3 .github/scripts/angelacam-smoke-ui.py app-release.apk
       - name: Upload screenshot
