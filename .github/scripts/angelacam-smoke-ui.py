@@ -65,11 +65,25 @@ def seed_update_preferences():
     adb("shell", "restorecon", "-RF", PREFS_DIR, check=False)
 
 
-def dump_ui(name):
+def dump_ui(name, attempts=3):
     remote = f"/sdcard/{name}"
-    adb("shell", "uiautomator", "dump", remote)
-    adb("pull", remote, name)
-    return ET.parse(name).getroot()
+    last_error = ""
+    for attempt in range(1, attempts + 1):
+        # UiAutomation can sporadically return a null root after waiting for idle.
+        adb("shell", "rm", "-f", remote, check=False)
+        output = adb("shell", "uiautomator", "dump", remote, check=False)
+        if "UI hierchary dumped to:" not in output:
+            last_error = output.strip() or "uiautomator produced no success marker"
+        else:
+            try:
+                adb("pull", remote, name)
+                return ET.parse(name).getroot()
+            except (RuntimeError, ET.ParseError) as exc:
+                last_error = str(exc)
+        if attempt < attempts:
+            print(f"UI_DUMP_RETRY {attempt}/{attempts}: {last_error}", flush=True)
+            time.sleep(2)
+    raise RuntimeError(f"UI hierarchy dump failed after {attempts} attempts: {last_error}")
 
 
 def iter_nodes(root):
