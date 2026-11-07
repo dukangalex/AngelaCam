@@ -36,6 +36,60 @@ def wait_for_device(timeout=120):
     raise TimeoutError("ADB did not return to the online, boot-complete state")
 
 
+def wait_for_android_system_ui(timeout=180):
+    """Do not launch the camera app while Android 14 SystemUI is still booting."""
+    api_level = int(adb("shell", "getprop", "ro.build.version.sdk").strip())
+    if api_level < 34:
+        return
+
+    marker = "Initialization of com.android.systemui.statusbar.phone.CentralSurfaces took"
+    deadline = time.time() + timeout
+    stable_passes = 0
+    last_state = "SystemUI CentralSurfaces initialization marker not seen"
+    next_report = 30
+    started = time.time()
+    print("WAIT_ANDROID_SYSTEM_UI_READY", f"api={api_level}", flush=True)
+    while time.time() < deadline:
+        try:
+            logs = subprocess.run(
+                ["adb", "logcat", "-d", "-v", "brief", "-s", "SystemUIService"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=15,
+            )
+            if marker not in logs.stdout:
+                last_state = "SystemUI CentralSurfaces has not completed initialization"
+                stable_passes = 0
+            else:
+                windows = subprocess.run(
+                    ["adb", "shell", "dumpsys", "window", "windows"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, timeout=15,
+                )
+                if windows.returncode != 0:
+                    last_state = "could not inspect Android window state"
+                    stable_passes = 0
+                elif "Application Not Responding:" in windows.stdout:
+                    last_state = "Android ANR dialog/window is still present"
+                    stable_passes = 0
+                else:
+                    stable_passes += 1
+                    if stable_passes >= 2:
+                        print("ANDROID_SYSTEM_UI_READY_OK", f"stable_for={int(time.time() - started)}s", flush=True)
+                        return
+        except Exception as exc:
+            last_state = f"{type(exc).__name__}: {exc}"
+            stable_passes = 0
+
+        elapsed = time.time() - started
+        if elapsed >= next_report:
+            print(f"WAIT_ANDROID_SYSTEM_UI elapsed={int(elapsed)}s state={last_state}", flush=True)
+            next_report += 30
+        time.sleep(5)
+
+    capture_diagnostics("Android system UI did not become stable before app launch: " + last_state)
+    raise TimeoutError(f"Android system UI was not ready within {timeout}s: {last_state}")
+
+
 def seed_update_preferences():
     adb("root", check=False)
     wait_for_device()
@@ -289,6 +343,7 @@ def main():
 
     adb("install", "-r", apk)
     seed_update_preferences()
+    wait_for_android_system_ui()
     adb("logcat", "-c", check=False)
     start_output = adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
     if "Error:" in start_output:
