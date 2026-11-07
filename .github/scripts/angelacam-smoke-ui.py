@@ -69,8 +69,23 @@ def dump_ui(name, attempts=3):
     remote = f"/sdcard/{name}"
     last_error = ""
     for attempt in range(1, attempts + 1):
+        # ADB can briefly lose the emulator transport between UI dump attempts.
+        try:
+            wait_for_device(timeout=60)
+        except TimeoutError as exc:
+            last_error = str(exc)
+            if attempt < attempts:
+                print(f"UI_DUMP_DEVICE_RETRY {attempt}/{attempts}: {last_error}", flush=True)
+                continue
+            break
         # UiAutomation can sporadically return a null root after waiting for idle.
-        adb("shell", "rm", "-f", remote, check=False)
+        remove_output = adb("shell", "rm", "-f", remote, check=False)
+        if "transport endpoint is not connected" in remove_output.lower():
+            last_error = remove_output.strip()
+            if attempt < attempts:
+                print(f"UI_DUMP_DEVICE_RETRY {attempt}/{attempts}: {last_error}", flush=True)
+                continue
+            break
         output = adb("shell", "uiautomator", "dump", remote, check=False)
         if "UI hierchary dumped to:" not in output:
             last_error = output.strip() or "uiautomator produced no success marker"
