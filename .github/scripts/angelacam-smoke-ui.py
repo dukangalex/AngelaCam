@@ -269,10 +269,18 @@ def main():
         )
     else:
         permission_names = ("android.permission.READ_EXTERNAL_STORAGE",)
+    permission_dump = adb("shell", "dumpsys", "package", PACKAGE)
     for permission in permission_names:
-        state = adb("shell", "pm", "check-permission", permission, PACKAGE).strip().lower()
-        if state == "granted":
+        states = [
+            line.strip().lower()
+            for line in permission_dump.splitlines()
+            if line.strip().startswith(f"{permission}:") and "granted=" in line
+        ]
+        if not states:
+            raise RuntimeError(f"Could not determine runtime permission state: {permission}")
+        if any("granted=true" in state for state in states):
             raise RuntimeError(f"Media permission was granted before user consent: {permission}")
+        print("MEDIA_PERMISSION_NOT_GRANTED_OK", api_level, permission, flush=True)
     print("MEDIA_DISCLOSURE_BEFORE_RUNTIME_PERMISSION_OK", api_level, flush=True)
 
 
