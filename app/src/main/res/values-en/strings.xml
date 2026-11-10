@@ -181,4 +181,14 @@
     <string name="edit_discard_ok">Discard</string>
     <string name="edit_discard_cancel">Keep editing</string>
     <string name="update_open_failed">Couldn\'t open the APK download \u2014 please try again later</string>
+    <string name="desc_qr_scan">Scan QR code</string>
+    <string name="quick_qr_scan">Scan</string>
+    <string name="qr_scanner_title">Scan QR code</string>
+    <string name="qr_scanner_hint">Place a QR code inside the frame</string>
+    <string name="qr_safety_note">Scanned content is shown for review. Links and actions are never opened automatically.</string>
+    <string name="qr_result_title">QR code content</string>
+    <string name="qr_scan_again">Scan again</string>
+    <string name="qr_done">Done</string>
+    <string name="qr_permission_denied">Camera permission is needed to scan QR codes.</string>
+    <string name="qr_camera_start_failed">Camera could not start. Go back and try again.</string>
 </resources>

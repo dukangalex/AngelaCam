@@ -121,6 +121,13 @@ class MainActivity : AppCompatActivity() {
         if (externalCaptureAction == MediaStore.ACTION_VIDEO_CAPTURE) recording?.stop()
     }
 
+    private val qrScannerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (hasCameraPermission()) {
+                // Rebind the viewfinder after the scanner activity releases the shared camera.
+                if (cameraProvider != null) bindUseCases() else startCamera()
+            }
+        }
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
             if (grants[Manifest.permission.CAMERA] == true) {
@@ -832,6 +839,10 @@ class MainActivity : AppCompatActivity() {
         controls.btnTimer.setOnClickListener { cycleTimer() }
         controls.btnAspect.setOnClickListener { cycleAspect() }
         controls.btnGrid.setOnClickListener { cycleGrid() }
+        controls.btnQrScanner.setOnClickListener {
+            closeQuickControls()
+            qrScannerLauncher.launch(Intent(this, QrScannerActivity::class.java))
+        }
         controls.btnAdvancedSettings.setOnClickListener {
             closeQuickControls()
             showSettings()

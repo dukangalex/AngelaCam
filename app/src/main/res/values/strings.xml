@@ -180,4 +180,14 @@
     <string name="edit_discard_ok">放弃</string>
     <string name="edit_discard_cancel">继续编辑</string>
     <string name="update_open_failed">无法打开 APK 下载，请稍后重试</string>
+    <string name="desc_qr_scan">扫描二维码</string>
+    <string name="quick_qr_scan">扫码</string>
+    <string name="qr_scanner_title">扫描二维码</string>
+    <string name="qr_scanner_hint">将二维码放入取景框中</string>
+    <string name="qr_safety_note">扫描结果仅供查看，不会自动打开链接或执行操作</string>
+    <string name="qr_result_title">二维码内容</string>
+    <string name="qr_scan_again">再扫一次</string>
+    <string name="qr_done">完成</string>
+    <string name="qr_permission_denied">相机权限未授权，无法扫描二维码</string>
+    <string name="qr_camera_start_failed">相机暂时无法启动，请返回后重试</string>
 </resources>

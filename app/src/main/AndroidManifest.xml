@@ -50,6 +50,11 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".QrScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity
             android:name=".GalleryActivity"
             android:exported="true"
             android:screenOrientation="portrait"
