@@ -654,7 +654,13 @@ class MainActivity : AppCompatActivity() {
         ).setContentValues(values).build()
 
         val pending = vc.output.prepareRecording(this, output).apply {
-            if (withAudio) withAudioEnabled()
+            if (
+                withAudio &&
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) ==
+                    PackageManager.PERMISSION_GRANTED
+            ) {
+                withAudioEnabled()
+            }
         }
         recording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
             when (event) {

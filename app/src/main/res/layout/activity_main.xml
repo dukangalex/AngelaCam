@@ -84,7 +84,11 @@
         android:layout_width="@dimen/focus_ring_size"
         android:layout_height="@dimen/focus_ring_size"
         android:background="@drawable/focus_ring"
-        android:visibility="invisible" />
+        android:visibility="invisible"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
     <TextView
         android:id="@+id/tvCountdown"
