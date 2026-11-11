@@ -35,6 +35,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".trial"
+            versionNameSuffix = "-trial"
+        }
         release {
             if (releaseKeystorePath != null) {
                 signingConfig = signingConfigs.getByName("release")
