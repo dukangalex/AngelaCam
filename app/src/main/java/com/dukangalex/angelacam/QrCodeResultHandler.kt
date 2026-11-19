@@ -1,6 +1,8 @@
 package com.dukangalex.angelacam
 
 import com.google.mlkit.vision.barcode.common.Barcode
+import java.net.URI
+import java.util.Locale
 
 /** The decoder's format is mapped here so result handling stays easy to unit-test. */
 internal enum class QrCodeFormat {
@@ -28,5 +30,41 @@ internal object QrCodeResultHandler {
             it.format == QrCodeFormat.QR_CODE && !it.rawValue.isNullOrEmpty()
         }?.rawValue ?: return null
         return QrScanResult(text)
+    }
+
+    /** Return a canonical HTTP(S) URL suitable for Android intent-filter matching. */
+    fun browserUrlOrNull(rawText: String): String? {
+        val candidate = rawText.trim()
+        if (candidate.isEmpty()) return null
+        val uri = try {
+            URI(candidate)
+        } catch (_: Exception) {
+            return null
+        }
+        val scheme = uri.scheme ?: return null
+        if (!scheme.equals("http", ignoreCase = true) &&
+            !scheme.equals("https", ignoreCase = true)
+        ) return null
+        val host = uri.host?.takeIf { it.isNotBlank() } ?: return null
+        if (uri.isOpaque || uri.port !in -1..65535) return null
+
+        val normalizedHost = when {
+            host.startsWith("[") && host.endsWith("]") -> host.lowercase(Locale.ROOT)
+            ':' in host -> "[${host.lowercase(Locale.ROOT)}]"
+            else -> host.lowercase(Locale.ROOT)
+        }
+        val normalizedAuthority = buildString {
+            uri.rawUserInfo?.let { append(it).append('@') }
+            append(normalizedHost)
+            if (uri.port >= 0) append(':').append(uri.port)
+        }
+        return buildString {
+            append(scheme.lowercase(Locale.ROOT))
+            append("://")
+            append(normalizedAuthority)
+            append(uri.rawPath.orEmpty())
+            uri.rawQuery?.let { append('?').append(it) }
+            uri.rawFragment?.let { append('#').append(it) }
+        }
     }
 }

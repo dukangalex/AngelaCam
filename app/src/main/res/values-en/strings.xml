@@ -4,6 +4,7 @@
     <string name="app_name">AngelaCam</string>
     <string name="mode_photo">Photo</string>
     <string name="mode_video">Video</string>
+    <string name="exposure_adaptive">Adaptive</string>
     <string name="desc_flash">Flash</string>
     <string name="desc_switch_camera">Switch Camera</string>
     <string name="desc_shutter">Take Photo</string>
@@ -191,4 +192,7 @@
     <string name="qr_done">Done</string>
     <string name="qr_permission_denied">Camera permission is needed to scan QR codes.</string>
     <string name="qr_camera_start_failed">Camera could not start. Go back and try again.</string>
+    <string name="qr_open_browser">Choose browser</string>
+    <string name="qr_browser_chooser_title">Choose a browser</string>
+    <string name="qr_browser_unavailable">The system could not open the link chooser. Check that a browser is installed and enabled, then try again.</string>
 </resources>

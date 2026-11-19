@@ -1,6 +1,7 @@
 package com.dukangalex.angelacam
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
@@ -91,6 +92,21 @@ class QrScannerActivity : AppCompatActivity() {
         binding.btnBack.setOnClickListener { finish() }
         binding.btnDone.setOnClickListener { finish() }
         binding.btnScanAgain.setOnClickListener { scanAgain() }
+        binding.btnOpenBrowser.setOnClickListener {
+            val chooserIntent = QrBrowserIntentFactory.createChooserIntent(
+                binding.tvResultValue.text.toString(),
+                getString(R.string.qr_browser_chooser_title)
+            ) ?: return@setOnClickListener
+            try {
+                startActivity(chooserIntent)
+            } catch (error: ActivityNotFoundException) {
+                Log.w(TAG, "No system activity could launch the URL chooser", error)
+                Toast.makeText(this, R.string.qr_browser_unavailable, Toast.LENGTH_SHORT).show()
+            } catch (error: SecurityException) {
+                Log.w(TAG, "System blocked the URL chooser", error)
+                Toast.makeText(this, R.string.qr_browser_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
@@ -139,6 +155,11 @@ class QrScannerActivity : AppCompatActivity() {
         binding.tvInstruction.visibility = View.GONE
         binding.tvSafetyNote.visibility = View.GONE
         binding.tvResultValue.text = text
+        binding.btnOpenBrowser.visibility = if (QrCodeResultHandler.browserUrlOrNull(text) != null) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         binding.resultPanel.visibility = View.VISIBLE
     }
 

@@ -11,8 +11,8 @@ android {
         applicationId = "com.dukangalex.angelacam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.9.5"
+        versionCode = 26
+        versionName = "1.9.6"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -57,6 +57,14 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+            }
+        }
+    }
 }
 
 kotlin {
@@ -85,4 +93,5 @@ dependencies {
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
 }

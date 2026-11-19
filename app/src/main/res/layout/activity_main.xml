@@ -118,7 +118,7 @@
         android:paddingEnd="16dp"
         android:paddingBottom="4dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/bottomBar"
+        app:layout_constraintBottom_toTopOf="@+id/modeSelector"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
         <TextView
@@ -137,14 +137,23 @@
             android:layout_weight="1" />
         <TextView
             android:id="@+id/tvEv"
-            android:layout_width="64dp"
+            android:layout_width="48dp"
             android:layout_height="wrap_content"
             android:text="+0.0"
             android:textColor="#FFFFFF"
             android:textSize="14sp" />
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switchAdaptiveExposure"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:minWidth="0dp"
+            android:text="@string/exposure_adaptive"
+            android:textColor="#FFFFFFFF"
+            android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Keep the shutter centered; lens switching sits away from the gallery. -->
+    <!-- Three distinct action zones keep lens switching away from the centered shutter. -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
@@ -156,54 +165,101 @@
         android:elevation="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="10dp"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-        <ImageButton
-            android:id="@+id/btnThumbnail"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/thumbnail_bg"
-            android:clipToOutline="true"
-            android:contentDescription="@string/desc_thumbnail"
-            android:scaleType="centerCrop" />
-        <Space
+        <FrameLayout
             android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-        <ImageButton
-            android:id="@+id/btnShutter"
-            android:layout_width="76dp"
-            android:layout_height="76dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/desc_shutter"
-            android:scaleType="center"
-            android:src="@drawable/ic_shutter" />
-        <ImageButton
-            android:id="@+id/btnSwitchCamera"
-            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_camera_control"
-            android:contentDescription="@string/desc_switch_camera"
-            android:scaleType="center"
-            android:src="@drawable/ic_switch_camera" />
+            android:layout_weight="1">
+            <ImageButton
+                android:id="@+id/btnSwitchCamera"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_camera_control"
+                android:contentDescription="@string/desc_switch_camera"
+                android:scaleType="center"
+                android:src="@drawable/ic_switch_camera" />
+        </FrameLayout>
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="76dp"
+            android:layout_weight="1">
+            <ImageButton
+                android:id="@+id/btnShutter"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_gravity="center"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/desc_shutter"
+                android:scaleType="center"
+                android:src="@drawable/ic_shutter" />
+        </FrameLayout>
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1">
+            <ImageButton
+                android:id="@+id/btnThumbnail"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/thumbnail_bg"
+                android:clipToOutline="true"
+                android:contentDescription="@string/desc_thumbnail"
+                android:scaleType="centerCrop" />
+        </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/modeSelector"
+        style="?android:attr/buttonBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_camera_dock"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="4dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
         <Button
-            android:id="@+id/btnMode"
-            android:layout_width="72dp"
+            android:id="@+id/btnModePhoto"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="92dp"
             android:layout_height="44dp"
-            android:minWidth="72dp"
+            android:layout_marginEnd="2dp"
+            android:minWidth="0dp"
             android:minHeight="44dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:background="@drawable/bg_camera_mode_chip"
-            android:backgroundTint="@color/camera_mode_background"
+            android:backgroundTint="@null"
+            app:backgroundTint="@null"
             android:text="@string/mode_photo"
+            android:textColor="@color/camera_mode_text"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium" />
+        <Button
+            android:id="@+id/btnModeVideo"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="92dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="2dp"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_camera_mode_chip"
+            android:backgroundTint="@null"
+            app:backgroundTint="@null"
+            android:text="@string/mode_video"
             android:textColor="@color/camera_mode_text"
             android:textSize="13sp"
             android:fontFamily="sans-serif-medium" />

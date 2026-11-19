@@ -3,6 +3,7 @@
     <string name="app_name">Angela相机</string>
     <string name="mode_photo">拍照</string>
     <string name="mode_video">录像</string>
+    <string name="exposure_adaptive">自适应</string>
     <string name="desc_flash">闪光灯</string>
     <string name="desc_switch_camera">切换摄像头</string>
     <string name="desc_shutter">拍摄</string>
@@ -190,4 +191,7 @@
     <string name="qr_done">完成</string>
     <string name="qr_permission_denied">相机权限未授权，无法扫描二维码</string>
     <string name="qr_camera_start_failed">相机暂时无法启动，请返回后重试</string>
+    <string name="qr_open_browser">选择浏览器</string>
+    <string name="qr_browser_chooser_title">选择浏览器</string>
+    <string name="qr_browser_unavailable">无法启动系统链接选择器。请确认已安装并启用浏览器后重试</string>
 </resources>

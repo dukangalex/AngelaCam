@@ -52,4 +52,26 @@ class QrCodeResultHandlerTest {
     fun returnsNoResultWhenThereAreNoDetections() {
         assertNull(QrCodeResultHandler.firstResult(emptyList()))
     }
+
+    @Test
+    fun allowsOnlyValidHttpAndHttpsUrlsForExplicitBrowserAction() {
+        assertEquals(
+            "https://example.com/Path?X=Ab#Frag",
+            QrCodeResultHandler.browserUrlOrNull(" HTTPS://Example.COM/Path?X=Ab#Frag ")
+        )
+        assertEquals("http://localhost:8080/path", QrCodeResultHandler.browserUrlOrNull("http://localhost:8080/path"))
+    }
+
+    @Test
+    fun rejectsOtherSchemesMalformedUrlsAndInvalidPorts() {
+        listOf(
+            "plain text",
+            "www.example.com",
+            "ftp://example.com/file",
+            "javascript:alert(1)",
+            "https://",
+            "https://bad host/path",
+            "https://example.com:99999/path"
+        ).forEach { assertNull(it, QrCodeResultHandler.browserUrlOrNull(it)) }
+    }
 }

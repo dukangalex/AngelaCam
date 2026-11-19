@@ -10,6 +10,10 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.media.MediaActionSound
 import android.net.Uri
 import android.os.Build
@@ -34,6 +38,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -97,6 +102,15 @@ class MainActivity : AppCompatActivity() {
     private var shutterSound = true
     private var tapCapture = false
     private var autoUpdateCheck = false
+    private var adaptiveExposureEnabled = true
+    @Volatile private var cameraBindingGeneration = 0
+    @Volatile private var lastExposureSampleAtMs = 0L
+    private var exposureIndexLower = 0
+    private var exposureIndexUpper = 0
+    private var exposureCompensationStepEv = 0.0
+    private var adaptiveRequestIndex: Int? = null
+    private var adaptiveRequestAtMs = 0L
+    private var adaptiveRequestGeneration = 0
     @Volatile private var availableUpdateInfo: UpdateChecker.UpdateInfo? = null
     private var installedVersionView: TextView? = null
     private var updateEntryView: TextView? = null
@@ -213,6 +227,7 @@ class MainActivity : AppCompatActivity() {
         shutterSound = prefs.getBoolean(KEY_SHUTTER_SOUND, true)
         tapCapture = prefs.getBoolean(KEY_TAP_CAPTURE, false)
         autoUpdateCheck = prefs.getBoolean(KEY_AUTO_UPDATE, false)
+        adaptiveExposureEnabled = prefs.getBoolean(KEY_ADAPTIVE_EXPOSURE, true)
         availableUpdateInfo = loadCachedAvailableUpdate()
         mediaActionSound = MediaActionSound().apply {
             load(MediaActionSound.SHUTTER_CLICK)
@@ -220,7 +235,8 @@ class MainActivity : AppCompatActivity() {
 
         setupGestures()
         binding.btnShutter.setOnClickListener { onShutter() }
-        binding.btnMode.setOnClickListener { toggleMode() }
+        binding.btnModePhoto.setOnClickListener { setPhotoMode(true) }
+        binding.btnModeVideo.setOnClickListener { setPhotoMode(false) }
         binding.btnFlash.setOnClickListener { cycleFlash() }
         binding.btnSwitchCamera.setOnClickListener { switchCamera() }
         binding.btnThumbnail.setOnClickListener { openGallery() }
@@ -231,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         updateAspectUi()
         updateGridUi()
         if (externalCaptureAction != null) {
-            binding.btnMode.visibility = View.GONE
+            binding.modeSelector.visibility = View.GONE
             binding.btnThumbnail.visibility = View.GONE
             binding.btnSettings.visibility = View.GONE
         }
@@ -250,6 +266,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        cameraBindingGeneration += 1
+        adaptiveRequestGeneration += 1
         super.onDestroy()
         uiHandler.removeCallbacks(timerRunnable)
         uiHandler.removeCallbacksAndMessages(null)
@@ -308,11 +326,50 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
     private fun bindUseCases() {
         val provider = cameraProvider ?: return
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+        val generation = ++cameraBindingGeneration
+        lastExposureSampleAtMs = 0L
+        adaptiveRequestIndex = null
+        adaptiveRequestAtMs = 0L
 
-        val preview = Preview.Builder().build().also {
+        val previewBuilder = Preview.Builder()
+        Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(
+            object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult
+                ) {
+                    if (generation != cameraBindingGeneration) return
+                    val activeCamera = camera ?: return
+                    val aperture = result.get(CaptureResult.LENS_APERTURE)?.toDouble() ?: return
+                    val exposureTimeNanos = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
+                    val sensitivityIso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
+                    val exposureState = activeCamera.cameraInfo.exposureState
+                    val stepEv = exposureState.exposureCompensationStep.toDouble()
+                    if (stepEv <= 0.0) return
+                    val appliedIndex = result.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)
+                        ?: exposureState.exposureCompensationIndex
+                    val sceneEv100 = AdaptiveExposurePolicy.sceneEv100(
+                        aperture = aperture,
+                        exposureTimeNanos = exposureTimeNanos,
+                        sensitivityIso = sensitivityIso,
+                        appliedCompensationEv = appliedIndex * stepEv
+                    ) ?: return
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastExposureSampleAtMs < ADAPTIVE_SAMPLE_INTERVAL_MS) return
+                    lastExposureSampleAtMs = now
+                    uiHandler.post {
+                        if (generation != cameraBindingGeneration || isDestroyed) return@post
+                        applyAdaptiveExposure(sceneEv100, appliedIndex)
+                    }
+                }
+            }
+        )
+        val preview = previewBuilder.build().also {
             it.setSurfaceProvider(binding.previewView.surfaceProvider)
         }
         imageCapture = ImageCapture.Builder()
@@ -716,12 +773,13 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- 模式 / 闪光灯 / 摄像头 / 网格线 ----------
 
-    private fun toggleMode() {
+    private fun setPhotoMode(usePhotoMode: Boolean) {
+        if (photoMode == usePhotoMode) return
         if (recording != null) {
             Toast.makeText(this, R.string.toast_recording_mode, Toast.LENGTH_SHORT).show()
             return
         }
-        photoMode = !photoMode
+        photoMode = usePhotoMode
         if (photoMode && torchOn) {
             torchOn = false
             camera?.cameraControl?.enableTorch(false)
@@ -730,13 +788,9 @@ class MainActivity : AppCompatActivity() {
         updateFlashIcon()
         updateTimerUi()
     }
-
     private fun updateModeUi() {
-        val currentMode = getString(if (photoMode) R.string.mode_photo else R.string.mode_video)
-        binding.btnMode.text = currentMode
-        binding.btnMode.contentDescription = getString(R.string.desc_current_mode, currentMode)
-        // This chip labels the active mode, so it stays highlighted in both modes.
-        binding.btnMode.isSelected = true
+        binding.btnModePhoto.isSelected = photoMode
+        binding.btnModeVideo.isSelected = !photoMode
     }
 
     private fun cycleFlash() {
@@ -765,6 +819,11 @@ class MainActivity : AppCompatActivity() {
             if (torchOn) R.drawable.ic_flash_on else R.drawable.ic_flash_off
         }
         binding.btnFlash.setImageResource(res)
+        binding.btnFlash.isSelected = if (photoMode) {
+            flashMode == ImageCapture.FLASH_MODE_ON
+        } else {
+            torchOn
+        }
     }
 
     private fun switchCamera() {
@@ -999,33 +1058,119 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupExposureBar() {
         val cam = camera ?: return
-        val expState = cam.cameraInfo.exposureState
-        if (!expState.isExposureCompensationSupported) {
+        val exposureState = cam.cameraInfo.exposureState
+        if (!exposureState.isExposureCompensationSupported) {
             binding.exposureBar.visibility = View.GONE
             return
         }
-        val range = expState.exposureCompensationRange
-        val step = expState.exposureCompensationStep.toDouble()
+        val range = exposureState.exposureCompensationRange
+        exposureIndexLower = range.lower
+        exposureIndexUpper = range.upper
+        exposureCompensationStepEv = exposureState.exposureCompensationStep.toDouble()
+        if (exposureCompensationStepEv <= 0.0) {
+            binding.exposureBar.visibility = View.GONE
+            return
+        }
+
         binding.exposureBar.visibility = View.VISIBLE
+        binding.seekExposure.setOnSeekBarChangeListener(null)
         binding.seekExposure.max = range.upper - range.lower
-        binding.seekExposure.progress = 0 - range.lower
-        updateEvText(0, step)
+        updateExposureUi(exposureState.exposureCompensationIndex)
+
+        binding.switchAdaptiveExposure.setOnCheckedChangeListener(null)
+        binding.switchAdaptiveExposure.isChecked = adaptiveExposureEnabled
+        binding.switchAdaptiveExposure.setOnCheckedChangeListener { _, enabled ->
+            setAdaptiveExposureEnabled(enabled)
+        }
         binding.seekExposure.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val index = range.lower + progress
-                cam.cameraControl.setExposureCompensationIndex(index)
-                updateEvText(index, step)
+                if (!fromUser) return
+                if (adaptiveExposureEnabled) setAdaptiveExposureEnabled(false)
+                val index = (range.lower + progress).coerceIn(range.lower, range.upper)
+                adaptiveRequestGeneration += 1
+                adaptiveRequestIndex = null
+                camera?.cameraControl?.setExposureCompensationIndex(index)
+                updateExposureUi(index)
             }
-
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
     }
 
+    private fun setAdaptiveExposureEnabled(enabled: Boolean) {
+        if (adaptiveExposureEnabled == enabled) return
+        adaptiveExposureEnabled = enabled
+        adaptiveRequestGeneration += 1
+        adaptiveRequestIndex = null
+        prefs.edit().putBoolean(KEY_ADAPTIVE_EXPOSURE, enabled).apply()
+        if (binding.switchAdaptiveExposure.isChecked != enabled) {
+            binding.switchAdaptiveExposure.isChecked = enabled
+        }
+
+        val cam = camera ?: return
+        if (enabled) {
+            // Start from neutral; the next stable preview samples choose any highlight protection.
+            val neutralIndex = 0.coerceIn(exposureIndexLower, exposureIndexUpper)
+            adaptiveRequestIndex = neutralIndex
+            adaptiveRequestAtMs = SystemClock.elapsedRealtime()
+            cam.cameraControl.setExposureCompensationIndex(neutralIndex)
+            updateExposureUi(neutralIndex)
+        } else {
+            // Freeze the last applied value and supersede any queued adaptive update.
+            val currentIndex = cam.cameraInfo.exposureState.exposureCompensationIndex
+                .coerceIn(exposureIndexLower, exposureIndexUpper)
+            cam.cameraControl.setExposureCompensationIndex(currentIndex)
+            updateExposureUi(currentIndex)
+        }
+    }
+
+    private fun applyAdaptiveExposure(sceneEv100: Double, appliedIndex: Int) {
+        if (!adaptiveExposureEnabled) return
+        if (torchOn || (photoMode && flashMode == ImageCapture.FLASH_MODE_ON)) return
+        val cam = camera ?: return
+        val stepEv = exposureCompensationStepEv
+        if (stepEv <= 0.0) return
+
+        val currentIndex = appliedIndex.coerceIn(exposureIndexLower, exposureIndexUpper)
+        val targetIndex = AdaptiveExposurePolicy.targetCompensationIndex(
+            sceneEv100 = sceneEv100,
+            stepEv = stepEv,
+            minIndex = exposureIndexLower,
+            maxIndex = exposureIndexUpper
+        )
+        updateExposureUi(currentIndex)
+        if (targetIndex == currentIndex) {
+            if (adaptiveRequestIndex == targetIndex) adaptiveRequestIndex = null
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (adaptiveRequestIndex == targetIndex && now - adaptiveRequestAtMs < ADAPTIVE_RETRY_DELAY_MS) return
+        if (now - adaptiveRequestAtMs < ADAPTIVE_MIN_REQUEST_INTERVAL_MS) return
+
+        val requestGeneration = ++adaptiveRequestGeneration
+        adaptiveRequestIndex = targetIndex
+        adaptiveRequestAtMs = now
+        cam.cameraControl.setExposureCompensationIndex(targetIndex).addListener({
+            if (requestGeneration != adaptiveRequestGeneration || !adaptiveExposureEnabled || camera !== cam) {
+                return@addListener
+            }
+            updateExposureUi(cam.cameraInfo.exposureState.exposureCompensationIndex)
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun updateExposureUi(index: Int) {
+        val stepEv = exposureCompensationStepEv
+        if (stepEv <= 0.0) return
+        val safeIndex = index.coerceIn(exposureIndexLower, exposureIndexUpper)
+        val progress = safeIndex - exposureIndexLower
+        if (binding.seekExposure.progress != progress) binding.seekExposure.progress = progress
+        binding.tvEv.text = String.format(Locale.US, "%+.1f", safeIndex * stepEv)
+    }
+
     private fun updateEvText(index: Int, step: Double) {
         binding.tvEv.text = String.format(Locale.US, "%+.1f", index * step)
     }
-
     // ---------- 手势：缩放 / 对焦 ----------
 
     private fun setupGestures() {
@@ -1140,6 +1285,10 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_SHUTTER_SOUND = "shutter_sound"
         private const val KEY_TAP_CAPTURE = "tap_capture"
         private const val KEY_AUTO_UPDATE = "auto_update_check"
+        private const val KEY_ADAPTIVE_EXPOSURE = "adaptive_exposure_enabled"
+        private const val ADAPTIVE_SAMPLE_INTERVAL_MS = 300L
+        private const val ADAPTIVE_MIN_REQUEST_INTERVAL_MS = 500L
+        private const val ADAPTIVE_RETRY_DELAY_MS = 1_500L
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
         private const val KEY_AVAILABLE_UPDATE_VERSION = "available_update_version"
         private const val KEY_AVAILABLE_UPDATE_NOTES = "available_update_notes"
