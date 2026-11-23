@@ -1,74 +1,204 @@
 name: Build APK
-
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: '正式版 tag（如 v1.0.0）；留空则只更新 dev-latest'
+        description: "正式版 tag（如 v1.9.7）；必须匹配 app/build.gradle.kts 的 versionName"
         required: false
-        default: ''
-
+        default: ""
+        type: string
 permissions:
-  contents: write
-
+  contents: read
 jobs:
   build:
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      # runner 自带完整 Android SDK，无需再装（android-actions/setup-android 会因请求已下架的 tools 包而失败）
-
+          distribution: temurin
+          java-version: "17"
+      # AGP 9.1.1 requires Gradle 9.x; the runner includes the Android SDK.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3
         with:
-          # AGP 9.1.1 需要 Gradle 9.x（原 8.7 是 AGP 8.5 时代的，2026-10-28 随工具链升级同步）
-          gradle-version: '9.3.1'
-
+          gradle-version: "9.3.1"
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest
-      # 正式签名：keystore 以 base64 存于 Secrets，构建时还原（绝不进仓库）
       - name: Restore release keystore
-        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-
-      - name: Build release APK
-        run: gradle :app:assembleRelease --stacktrace
+        shell: bash
         env:
-          RELEASE_KEYSTORE_PATH: app/release.keystore
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_KEYSTORE_BASE64"
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+      - name: Build and validate signed release APK
+        shell: bash
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle :app:assembleRelease --stacktrace
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
+          test -x "$build_tools/apksigner"
+          test -x "$build_tools/aapt"
+          mkdir -p release-artifact
+          cp "$apk" release-artifact/app-release.apk
+          "$build_tools/apksigner" verify --verbose --print-certs release-artifact/app-release.apk > release-artifact/signature-verification.txt 2>&1
+          python3 - "$build_tools/aapt" release-artifact/app-release.apk <<'PY'
+          import hashlib
+          import re
+          import subprocess
+          import sys
+          import zipfile
+          from pathlib import Path
 
-      # Validate and prepare a release-specific body before publishing any asset.
+          aapt, apk_path = sys.argv[1:]
+          apk = Path(apk_path)
+          assert apk.stat().st_size > 1_000_000, "APK is unexpectedly small"
+          with zipfile.ZipFile(apk) as archive:
+              assert "AndroidManifest.xml" in archive.namelist(), "APK has no manifest"
+              assert archive.testzip() is None, "APK ZIP integrity check failed"
+          badging = subprocess.run([aapt, "dump", "badging", str(apk)], check=True, capture_output=True, text=True).stdout
+          match = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']*)'", badging, re.M)
+          assert match, "could not read package/version from APK"
+          package_name, version_code, version_name = match.groups()
+          gradle = Path("app/build.gradle.kts").read_text(encoding="utf-8")
+          expected_package = re.search(r'applicationId\s*=\s*"([^"]+)"', gradle).group(1)
+          expected_code = re.search(r"versionCode\s*=\s*(\d+)", gradle).group(1)
+          expected_name = re.search(r'versionName\s*=\s*"([^"]+)"', gradle).group(1)
+          assert (package_name, version_code, version_name) == (expected_package, expected_code, expected_name), \
+              f"APK metadata {(package_name, version_code, version_name)} does not match Gradle configuration"
+          digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+          Path("release-artifact/app-release.apk.sha256").write_text(f"{digest}  app-release.apk\n", encoding="ascii")
+          Path("release-artifact/release-manifest.txt").write_text(
+              f"packageName={package_name}\nversionCode={version_code}\nversionName={version_name}\n"
+              f"sourceCommit={subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}\n"
+              f"apkSha256={digest}\napkSignature=apksigner-verified\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Prepare dev release notes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          metadata = dict(line.split("=", 1) for line in Path("release-artifact/release-manifest.txt").read_text().splitlines())
+          Path("release-artifact/dev-release-notes.md").write_text(
+              "Automated AngelaCam build.\n\n"
+              f"Version: {metadata['versionName']} (versionCode {metadata['versionCode']})\n\n"
+              f"Source commit: `{metadata['sourceCommit']}`\n\n"
+              f"APK SHA-256: `{metadata['apkSha256']}`\n\n"
+              "Verify the downloaded APK with `sha256sum -c app-release.apk.sha256`.\n",
+              encoding="utf-8",
+          )
+          PY
       - name: Prepare version-specific release notes
         if: ${{ inputs.release_tag != '' }}
+        shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
-        run: python3 .github/scripts/extract-release-notes.py "$RELEASE_TAG" RELEASE_NOTES.md release-notes.md
+        run: |
+          set -euo pipefail
+          python3 - "$RELEASE_TAG" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+          tag = sys.argv[1]
+          manifest = dict(line.split("=", 1) for line in Path("release-artifact/release-manifest.txt").read_text().splitlines())
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              raise SystemExit(f"invalid release tag: {tag!r}")
+          if tag != "v" + manifest["versionName"]:
+              raise SystemExit(f"tag {tag} must match APK version v{manifest['versionName']}")
+          PY
+          python3 .github/scripts/extract-release-notes.py "$RELEASE_TAG" RELEASE_NOTES.md release-artifact/release-notes.md
+          printf '\n---\n\nBuild metadata and APK checksum are attached as release assets.\n' >> release-artifact/release-notes.md
+      - name: Upload validated APK artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-release-apk
+          path: release-artifact/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove release keystore
+        if: always()
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+        run: rm -f -- "$KEYSTORE_PATH"
 
-      - name: Publish dev-latest
-        uses: softprops/action-gh-release@v2
+  publish:
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: angelacam-publish-${{ inputs.release_tag || 'dev-latest' }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated build artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: validated-release-apk
+          path: release-artifact
+      - name: Ensure version tag has never been used
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags https://github.com/dukangalex/AngelaCam.git "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing tag $RELEASE_TAG" >&2
+            exit 1
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "Unable to verify whether tag $RELEASE_TAG exists" >&2
+              exit "$status"
+            fi
+          fi
+      - name: Publish dev-latest prerelease
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: dev-latest
-          name: "最新版"
-          body: "正式签名的 release 版 APK，可直接安装；后续版本可覆盖更新。"
-          files: app/build/outputs/apk/release/app-release.apk
-
-      # 手动触发且填了版本号时，只发布该版本在 RELEASE_NOTES.md 中的说明段落。
+          name: "AngelaCam dev-latest"
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          body_path: release-artifact/dev-release-notes.md
+          files: |
+            release-artifact/app-release.apk
+            release-artifact/app-release.apk.sha256
+            release-artifact/release-manifest.txt
+            release-artifact/signature-verification.txt
       - name: Publish versioned release
-        if: ${{ inputs.release_tag != '' }}
-        uses: softprops/action-gh-release@v2
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.release_tag }}
           name: ${{ inputs.release_tag }}
-          body_path: release-notes.md
-          files: app/build/outputs/apk/release/app-release.apk
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true
+          body_path: release-artifact/release-notes.md
+          files: |
+            release-artifact/app-release.apk
+            release-artifact/app-release.apk.sha256
+            release-artifact/release-manifest.txt
+            release-artifact/signature-verification.txt

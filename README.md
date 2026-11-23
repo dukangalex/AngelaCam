@@ -13,17 +13,18 @@ A clean, privacy-first native Android camera app. Kotlin + CameraX.
 
 ## Privacy (least-privilege by design)
 
-- **Camera**: required, requested at first launch
-- **Microphone**: requested only the first time you record a video; if denied, recording continues silently
-- **Internet**: used solely to check GitHub for updates — when you tap "Check for updates", or daily if you opt in (off by default). Nothing is ever uploaded; photos and videos never leave the device
-- **Never requested**: location, storage read, contacts, or install-packages permissions
-- **No GPS in EXIF**: photos carry no location information
-- **The built-in gallery only contains what this app captured**, via an internal index — it never scans your photo library
+- **Camera**: required and requested at first launch.
+- **Legacy media saving**: Android 9 and earlier request legacy storage-write access along with camera access so captured media can be saved; the permission is capped at API 28. Android 10+ uses scoped MediaStore.
+- **Microphone**: requested only when recording video; recording can continue silently if access is denied.
+- **Built-in gallery**: AngelaCam's own captures are listed from a private index without device-library access. To browse other device photos/videos, the gallery explains why access is needed and requests the Android permissions for the built-in gallery. Android 14 and later can grant access to selected media only; the gallery queries only the scope Android grants. If access is denied, AngelaCam captures remain available.
+- **Image selection for another app**: `ACTION_GET_CONTENT` and image `ACTION_PICK` requests open Android's system Photo Picker (or the system document-picker fallback). AngelaCam returns only the selected image URI(s) with read access to the requesting app; this flow does not request broad `READ_MEDIA_*` library access.
+- **Network and updates**: a manual update check, or optional automatic checks (off by default; at most once every 24 hours), sends a GET request to GitHub Releases for public release metadata. The update request does not attach local photos or videos. APK downloads are opened in the external browser; AngelaCam does not install packages itself.
+- **Not requested**: location, contacts, or install-packages permission. The app has no location permission.
 
 ## Build
 
 - Open this directory in Android Studio and Run (JDK 17)
-- GitHub Actions: pushes to `main` build a debug APK and publish it to the `dev-latest` prerelease
+- GitHub Actions: pushes to `main` run tests, build and validate a signed release APK, then publish it as `dev-latest`; a versioned release requires a manual workflow dispatch with a matching version tag. Only the publish job receives `contents: write`; release assets include a SHA-256 checksum and build manifest.
 
 ---
 
@@ -42,14 +43,15 @@ A clean, privacy-first native Android camera app. Kotlin + CameraX.
 
 ## 隐私（最小权限原则）
 
-- **相机**：必需，启动时申请
-- **麦克风**：只在用户第一次按下录像键时按需申请；拒绝则静音录制，不阻断使用
-- **网络**：仅用于检查更新——用户点「检查更新」时，或开启自动检查后每天至多一次（默认关闭）；不上传任何数据，照片/视频永不出设备
-- **不申请**：位置、存储读取、通讯录、安装未知应用等权限
-- **不写 GPS**：照片 EXIF 不包含位置信息
-- **自带相册只收录本应用拍摄的内容**：通过内部记录索引，不扫描用户相册
+- **相机**：必需，启动时申请。
+- **旧版系统保存媒体**：Android 9 及以下为保存媒体，会随相机权限一起请求旧版存储写入权限；该权限仅适用于 API 28 及以下，Android 10+ 使用 scoped MediaStore。
+- **麦克风**：只在录像时按需申请；拒绝后仍可静音录像。
+- **自带相册**：本应用拍摄内容通过私有索引列出，不需要读取整库媒体权限。若要在自带相册中浏览设备上的其他照片/视频，应用会说明用途并请求 Android 媒体权限；Android 14 及以上可只授权所选媒体，相册只查询系统实际授予的范围。拒绝后仍可浏览 AngelaCam 自己拍摄的内容。
+- **其他应用请求选择图片**：收到 `ACTION_GET_CONTENT` 或图片 `ACTION_PICK` 请求时，应用打开 Android 系统照片选择器（不可用时使用系统文档选择器回退），只把用户选中的图片 URI 及读取权限交还给发起应用；此流程不申请整库 `READ_MEDIA_*` 权限。
+- **网络与更新**：用户手动检查更新，或开启自动检查后（默认关闭、至多每 24 小时一次），应用向 GitHub Releases 发送 GET 请求以读取公开版本信息。更新请求不附带本机照片或视频；APK 下载交由外部浏览器打开，AngelaCam 本身不安装 APK。
+- **不申请**：位置、通讯录或安装应用权限；应用没有位置权限。
 
 ## 构建
 
 - Android Studio 打开本目录，Run 即可（JDK 17）
-- GitHub Actions：每次推送到 `main` 自动构建 debug APK，并发布到 `dev-latest` 预发布
+- GitHub Actions：推送到 `main` 后运行测试、构建并校验正式签名 APK，再发布到 `dev-latest`；正式版本需手动运行工作流并填写与应用版本一致的 tag。只有发布 job 获得 `contents: write`；发布资产包含 SHA-256 校验和与构建清单。

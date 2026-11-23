@@ -2,14 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Read other apps' media only after a user-visible disclosure and runtime grant. -->
+    <!-- Used by the built-in gallery only, after disclosure and runtime grant; external selection uses scoped Photo Picker URI grants. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
-    <!-- v1.3.0：仅用于检查更新（只连接 GitHub，用户可关闭），不做其他任何网络请求 -->
+    <!-- Used by optional GitHub release-metadata checks; APK downloads are opened in the external browser. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 不再持有 REQUEST_INSTALL_PACKAGES：应用内装包是 Play Protect 的主要判定
          触发面；发现新版只跳转浏览器打开 Release 页下载（2026-10-28 审计处置） -->
