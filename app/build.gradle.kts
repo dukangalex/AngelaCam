@@ -11,8 +11,8 @@ android {
         applicationId = "com.dukangalex.angelacam"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.9.6"
+        versionCode = 27
+        versionName = "1.9.7"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -25,7 +25,7 @@ android {
     if (releaseKeystorePath != null) {
         signingConfigs {
             create("release") {
-                // 相对仓库根目录解析（workflow 把 keystore 还原到 <root>/app/release.keystore）
+                // CI 将密钥暂存于 runner 临时目录；不要还原到仓库工作区。
                 storeFile = rootProject.file(releaseKeystorePath)
                 storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("RELEASE_KEY_ALIAS")

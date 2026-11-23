@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ 的数据提取规则：云备份与设备间迁移都排除拍摄记录索引，
-     它只含本机媒体 URI，迁到新设备也无意义且属用户数据 -->
+<!-- Android 12+：云备份与设备迁移均排除本机媒体索引和相册权限提示状态；其他偏好仍按系统默认规则处理。 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="captures.json" />
+        <exclude domain="sharedpref" path="GalleryActivity.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="captures.json" />
+        <exclude domain="sharedpref" path="GalleryActivity.xml" />
     </device-transfer>
 </data-extraction-rules>

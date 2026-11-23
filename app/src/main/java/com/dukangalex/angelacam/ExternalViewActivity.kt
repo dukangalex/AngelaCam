@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
  * 系统"打开方式"入口（v1.5.0）：
  * - intent-filter：VIEW 图片、VIEW 视频、SEND 图片、SEND_MULTIPLE 图片
  * - 在系统"使用以下方式打开"/分享列表中出现，与相册、Snapseed 同列
- * - 仅查看/编辑/设为壁纸/分享，不导入到本应用相册（相册只收录本应用拍摄内容）
+ * - 仅查看/编辑/设为壁纸/分享，不导入到本应用相册（自带相册可在系统授权范围内浏览设备媒体）
  * - 通过发送方授予的临时 URI 权限读取，不申请存储读取权限
  */
 class ExternalViewActivity : AppCompatActivity() {

@@ -7,12 +7,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 应用内更新检查（隐私设计，用户 2026-10-17 批准）：
- * - 仅在用户点击"检查更新"或开启"启动时自动检查"时联网，默认不自动联网
- * - 只访问 GitHub 域名（代码写死白名单）
- * - 不发送任何用户数据：仅一个普通 GET 请求（GitHub API 要求带 User-Agent）
- * - 照片/视频永远不出设备
- * - 开源可审计（GPL-3.0）
+ * Fetches public GitHub release metadata with a GET request when the user checks for updates
+ * or has enabled automatic checks. The request contains no local photo/video payload. Download
+ * links are opened by the external browser; this component does not download or install APKs.
  */
 object UpdateChecker {
 

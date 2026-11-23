@@ -3,7 +3,6 @@ package com.dukangalex.angelacam
 import android.Manifest
 import android.app.Activity
 import android.content.ContentUris
-import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -20,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -31,9 +31,9 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Built-in gallery and ACTION_GET_CONTENT/ACTION_PICK image picker.
- * Device media is queried only after the user sees the disclosure and grants the matching runtime permission.
- * AngelaCam's own CaptureStore items remain available without device-library permission.
+ * Built-in gallery for AngelaCam captures and device media. Device media is queried only after
+ * the user sees the disclosure and grants the matching runtime permission. External image
+ * selection requests are routed to Android's Photo Picker and return scoped URI read grants.
  */
 class GalleryActivity : AppCompatActivity() {
 
@@ -47,20 +47,9 @@ class GalleryActivity : AppCompatActivity() {
         val isVideo: Boolean get() = mime.startsWith("video/")
     }
 
-    private data class MediaAccess(
-        val images: Boolean,
-        val videos: Boolean,
-        val fullImages: Boolean,
-        val fullVideos: Boolean,
-        val selectedOnly: Boolean
-    )
-
     private lateinit var binding: ActivityGalleryBinding
     private val ioExecutor: ExecutorService = Executors.newFixedThreadPool(3)
-    private var selectionMode = false
-    private var allowMultiple = false
     private var disclosureShowing = false
-    private val selectedItems = linkedMapOf<String, GalleryItem>()
     private val adapter = CaptureAdapter()
 
     private val mediaPermissionLauncher =
@@ -69,39 +58,40 @@ class GalleryActivity : AppCompatActivity() {
             loadItems()
         }
 
+    private val singlePhotoPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            returnExternalSelection(if (uri == null) emptyList() else listOf(uri))
+        }
+
+    private val multiplePhotoPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+            returnExternalSelection(uris)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.action == Intent.ACTION_GET_CONTENT || intent.action == Intent.ACTION_PICK) {
+            if (!ExternalImageSelection.isImageRequest(intent)) {
+                setResult(Activity.RESULT_CANCELED)
+                finish()
+            } else if (savedInstanceState == null) {
+                launchExternalImagePicker(intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false))
+            }
+            return
+        }
+
         binding = ActivityGalleryBinding.inflate(layoutInflater)
         setContentView(binding.root)
         NavigationBarInsets.applyTo(binding.root)
-
-        selectionMode = intent.action == Intent.ACTION_GET_CONTENT || intent.action == Intent.ACTION_PICK
-        if (selectionMode && !isImageRequest(intent)) {
-            setResult(Activity.RESULT_CANCELED)
-            finish()
-            return
-        }
-        allowMultiple = selectionMode && intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
-        binding.tvTitle.setText(if (selectionMode) R.string.gallery_select_title else R.string.gallery_title)
-        binding.btnDone.visibility = if (allowMultiple) View.VISIBLE else View.GONE
-        binding.btnDone.setOnClickListener { returnSelection(selectedItems.values.toList()) }
+        binding.tvTitle.setText(R.string.gallery_title)
+        binding.btnDone.visibility = View.GONE
         binding.btnMediaAccess.setOnClickListener { showMediaPermissionDisclosure() }
         binding.btnBack.setOnClickListener { finish() }
         binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
         binding.recyclerView.adapter = adapter
         adapter.onItemClick = { position ->
             adapter.itemAt(position)?.let { item ->
-                if (selectionMode) {
-                    if (allowMultiple) {
-                        if (selectedItems.remove(item.uri.toString()) == null) {
-                            selectedItems[item.uri.toString()] = item
-                        }
-                        adapter.notifyDataSetChanged()
-                        updateDoneButton()
-                    } else {
-                        returnSelection(listOf(item))
-                    }
-                } else if (item.ownedPosition != null) {
+                if (item.ownedPosition != null) {
                     val detailIntent = Intent(this, DetailActivity::class.java).apply {
                         putExtra(DetailActivity.EXTRA_POSITION, item.ownedPosition)
                     }
@@ -116,12 +106,12 @@ class GalleryActivity : AppCompatActivity() {
                 }
             }
         }
-        updateDoneButton()
         updateMediaPermissionUi()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!::binding.isInitialized) return
         loadItems()
         val access = mediaAccess()
         if (!hasDesiredAccess(access) && !preferences().getBoolean(KEY_DISCLOSURE_SHOWN, false) && !disclosureShowing) {
@@ -136,56 +126,44 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun preferences() = getPreferences(MODE_PRIVATE)
 
-    private fun isImageRequest(request: Intent): Boolean {
-        if (request.action != Intent.ACTION_GET_CONTENT && request.action != Intent.ACTION_PICK) return false
-        val types = mutableListOf<String>()
-        request.type?.let(types::add)
-        runCatching { request.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.forEach(types::add) }
-        val mimeMatches = types.any { it.substringBefore(';').trim().startsWith("image/", ignoreCase = true) }
-        val dataUri = request.data
-        val imageCollection = request.action == Intent.ACTION_PICK && dataUri?.let { uri ->
-            val segments = uri.pathSegments
-            val imagesIndex = segments.indexOf("images")
-            uri.scheme == "content" && uri.authority == "media" &&
-                imagesIndex >= 0 && segments.getOrNull(imagesIndex + 1) == "media"
-        } == true
-        return mimeMatches || imageCollection
+    private fun launchExternalImagePicker(allowMultiple: Boolean) {
+        val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        if (allowMultiple) multiplePhotoPickerLauncher.launch(request)
+        else singlePhotoPickerLauncher.launch(request)
     }
 
-    private fun permissionNames(): Array<String> = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> buildList {
-            add(Manifest.permission.READ_MEDIA_IMAGES)
-            if (!selectionMode) add(Manifest.permission.READ_MEDIA_VIDEO)
-            add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        }.toTypedArray()
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-            if (selectionMode) arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
-            else arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-        }
-        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    private fun returnExternalSelection(uris: List<Uri>) {
+        val result = ExternalImageSelection.createResult(uris, getString(R.string.app_name))
+        if (result == null) setResult(Activity.RESULT_CANCELED)
+        else setResult(Activity.RESULT_OK, result)
+        finish()
     }
 
-    private fun mediaAccess(): MediaAccess {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) ==
-                PackageManager.PERMISSION_GRANTED
-            return MediaAccess(granted, granted, granted, granted, false)
-        }
-        val fullImages = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) ==
-            PackageManager.PERMISSION_GRANTED
-        val fullVideos = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) ==
-            PackageManager.PERMISSION_GRANTED
-        val selectedOnly = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) ==
-            PackageManager.PERMISSION_GRANTED
-        return MediaAccess(fullImages || selectedOnly, fullVideos || selectedOnly, fullImages, fullVideos, selectedOnly)
+    private fun permissionNames(): Array<String> =
+        GalleryMediaPermissionPolicy.permissionsFor(Build.VERSION.SDK_INT)
+
+    private fun mediaAccess(): GalleryMediaAccess {
+        val apiLevel = Build.VERSION.SDK_INT
+        fun isGranted(permission: String) =
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        return GalleryMediaPermissionPolicy.fromGrantState(
+            apiLevel = apiLevel,
+            legacyReadGranted = apiLevel < Build.VERSION_CODES.TIRAMISU &&
+                isGranted(Manifest.permission.READ_EXTERNAL_STORAGE),
+            fullImagesGranted = apiLevel >= Build.VERSION_CODES.TIRAMISU &&
+                isGranted(Manifest.permission.READ_MEDIA_IMAGES),
+            fullVideosGranted = apiLevel >= Build.VERSION_CODES.TIRAMISU &&
+                isGranted(Manifest.permission.READ_MEDIA_VIDEO),
+            selectedOnlyGranted = apiLevel >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                isGranted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        )
     }
 
-    private fun hasDesiredAccess(access: MediaAccess): Boolean =
-        if (selectionMode) access.images else access.images || access.videos
+    private fun hasDesiredAccess(access: GalleryMediaAccess): Boolean =
+        GalleryMediaPermissionPolicy.hasDesiredAccess(access)
 
-    private fun hasFullDesiredAccess(access: MediaAccess): Boolean =
-        if (selectionMode) access.fullImages else access.fullImages && access.fullVideos
+    private fun hasFullDesiredAccess(access: GalleryMediaAccess): Boolean =
+        GalleryMediaPermissionPolicy.hasFullAccess(access)
 
     private fun updateMediaPermissionUi() {
         if (!::binding.isInitialized || isFinishing || isDestroyed) return
@@ -196,24 +174,16 @@ class GalleryActivity : AppCompatActivity() {
             if (hasDesiredAccess(access)) R.string.gallery_permission_manage else R.string.gallery_permission_allow
         )
         binding.tvMediaAccessInfo.visibility = if (fullAccess) View.GONE else View.VISIBLE
-        binding.tvMediaAccessInfo.setText(
-            if (selectionMode) R.string.gallery_permission_images_summary else R.string.gallery_permission_summary
-        )
-        updateDoneButton()
+        binding.tvMediaAccessInfo.setText(R.string.gallery_permission_summary)
     }
 
     private fun showMediaPermissionDisclosure() {
         if (disclosureShowing || isFinishing || isDestroyed) return
         disclosureShowing = true
         preferences().edit().putBoolean(KEY_DISCLOSURE_SHOWN, true).apply()
-        val message = if (selectionMode) {
-            R.string.gallery_permission_images_disclosure
-        } else {
-            R.string.gallery_permission_disclosure
-        }
         AlertDialog.Builder(this)
             .setTitle(R.string.gallery_permission_title)
-            .setMessage(message)
+            .setMessage(R.string.gallery_permission_disclosure)
             .setPositiveButton(R.string.gallery_permission_continue) { _, _ -> requestDeviceMediaPermissions() }
             .setNegativeButton(R.string.gallery_permission_not_now, null)
             .setOnDismissListener { disclosureShowing = false }
@@ -244,13 +214,6 @@ class GalleryActivity : AppCompatActivity() {
         mediaPermissionLauncher.launch(requested)
     }
 
-    private fun updateDoneButton() {
-        if (!::binding.isInitialized || !allowMultiple) return
-        binding.btnDone.text = getString(R.string.gallery_select_done_count, selectedItems.size)
-        binding.btnDone.isEnabled = selectedItems.isNotEmpty()
-        binding.btnDone.alpha = if (selectedItems.isNotEmpty()) 1f else 0.5f
-    }
-
     private fun loadItems() {
         ioExecutor.execute {
             // CaptureStore contains only media AngelaCam itself created and is safe without library permission.
@@ -263,20 +226,15 @@ class GalleryActivity : AppCompatActivity() {
             }
             queryDeviceMedia(access).forEach { item -> rows.putIfAbsent(item.uri.toString(), item) }
             val allRows = rows.values.sortedByDescending { it.date }
-            val visibleItems = if (selectionMode) allRows.filter { it.mime.startsWith("image/") && it.uri.scheme == "content" }
-            else allRows
+            val visibleItems = allRows
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                val available = visibleItems.mapTo(hashSetOf()) { it.uri.toString() }
-                selectedItems.keys.retainAll(available)
                 adapter.submit(visibleItems)
                 updateMediaPermissionUi()
-                val emptyText = when {
-                    visibleItems.isNotEmpty() -> R.string.gallery_empty
-                    !hasDesiredAccess(access) && selectionMode -> R.string.gallery_select_empty_no_access
-                    !hasDesiredAccess(access) -> R.string.gallery_empty_no_access
-                    selectionMode -> R.string.gallery_select_empty
-                    else -> R.string.gallery_empty
+                val emptyText = if (!hasDesiredAccess(access)) {
+                    R.string.gallery_empty_no_access
+                } else {
+                    R.string.gallery_empty
                 }
                 binding.tvEmpty.setText(emptyText)
                 binding.tvEmpty.visibility = if (visibleItems.isEmpty()) View.VISIBLE else View.GONE
@@ -285,10 +243,10 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     /** Query only collections whose matching runtime permission is currently granted. */
-    private fun queryDeviceMedia(access: MediaAccess): List<GalleryItem> {
+    private fun queryDeviceMedia(access: GalleryMediaAccess): List<GalleryItem> {
         val result = mutableListOf<GalleryItem>()
         if (access.images) result += queryCollection(video = false)
-        if (!selectionMode && access.videos) result += queryCollection(video = true)
+        if (access.videos) result += queryCollection(video = true)
         return result
     }
 
@@ -343,27 +301,6 @@ class GalleryActivity : AppCompatActivity() {
         }
     }
 
-    private fun returnSelection(items: List<GalleryItem>) {
-        val selected = items.filter { it.mime.startsWith("image/") && it.uri.scheme == "content" }
-        val first = selected.firstOrNull()
-        if (first == null) {
-            setResult(Activity.RESULT_CANCELED)
-            finish()
-            return
-        }
-        val result = Intent().apply {
-            setDataAndType(first.uri, first.mime)
-            clipData = ClipData.newUri(contentResolver, getString(R.string.app_name), first.uri)
-            selected.drop(1).forEach { item -> clipData?.addItem(ClipData.Item(item.uri)) }
-            if (selected.size > 1) {
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(selected.map { it.uri }))
-            }
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        setResult(Activity.RESULT_OK, result)
-        finish()
-    }
-
     private inner class CaptureAdapter : RecyclerView.Adapter<CaptureAdapter.VH>() {
 
         var onItemClick: ((Int) -> Unit)? = null
@@ -393,8 +330,7 @@ class GalleryActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             holder.tvBadge.visibility = if (item.isVideo) View.VISIBLE else View.GONE
-            holder.tvSelection.visibility =
-                if (selectionMode && selectedItems.containsKey(item.uri.toString())) View.VISIBLE else View.GONE
+            holder.tvSelection.visibility = View.GONE
             holder.ivThumb.setImageDrawable(null)
             holder.ivThumb.tag = item.uri.toString()
             ioExecutor.execute {

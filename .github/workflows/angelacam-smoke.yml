@@ -1,42 +1,52 @@
 name: angelacam-smoke
-
-# AngelaCam 全自动冒烟测试（无需人工介入）：
-# Build APK 构建成功后自动触发 → 模拟器安装 APK → 启动截图 → 检查进程存活 →
-# 验证"打开方式" intent-filter（VIEW 图片/视频能解析到 AngelaCam）→ 上传截图。
-
+# Read-only emulator smoke checks run after the separate Build APK workflow completes.
 "on":
   workflow_run:
     workflows: ["Build APK"]
     types: [completed]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   smoke:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     name: smoke-api-${{ matrix.api-level }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         api-level: [29, 30, 34]
     steps:
       - name: Checkout source for UI smoke
-        uses: actions/checkout@v4
-      - name: Download APK from dev-latest (authenticated)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Download APK and checksum from dev-latest
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release download dev-latest --repo dukangalex/AngelaCam --pattern app-release.apk --output app-release.apk
-          python3 -c "import hashlib,os,zipfile; p='app-release.apk'; z=zipfile.ZipFile(p); assert os.path.getsize(p)>1000000; assert 'AndroidManifest.xml' in z.namelist(); assert z.testzip() is None; print('APK_DOWNLOAD_OK bytes='+str(os.path.getsize(p))+' sha256='+hashlib.sha256(open(p,'rb').read()).hexdigest())"
-
+          for asset in app-release.apk app-release.apk.sha256 release-manifest.txt; do
+            gh release download dev-latest --repo dukangalex/AngelaCam --pattern "$asset"
+          done
+          sha256sum --check app-release.apk.sha256
+          python3 - <<'PY'
+          import hashlib
+          import zipfile
+          from pathlib import Path
+          apk = Path("app-release.apk")
+          assert apk.stat().st_size > 1_000_000
+          with zipfile.ZipFile(apk) as archive:
+              assert "AndroidManifest.xml" in archive.namelist()
+              assert archive.testzip() is None
+          manifest = dict(line.split("=", 1) for line in Path("release-manifest.txt").read_text().splitlines())
+          assert manifest["apkSha256"] == hashlib.sha256(apk.read_bytes()).hexdigest()
+          print(f"APK_DOWNLOAD_OK bytes={apk.stat().st_size} sha256={manifest['apkSha256']} source={manifest['sourceCommit']}")
+          PY
       - name: Smoke test on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api-level }}
           target: default
@@ -46,7 +56,7 @@ jobs:
             python3 .github/scripts/angelacam-smoke-ui.py app-release.apk
       - name: Upload screenshot
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: angelacam-smoke-screenshot-api-${{ matrix.api-level }}
           path: |
